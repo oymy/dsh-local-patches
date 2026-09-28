@@ -176,8 +176,17 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 
 2. **`pnpm install` 在内存紧张时必 OOM**（`node::worker::Worker::Run` → SIGABRT 134），`--offline` 也走不通。
    务实的替代是**跳过整仓 install，只补缺失的 workspace 链接**。
-   **但先检查机器内存**：swap 用满时（典型症状是 `vm_stat` 只剩几十 MB、uptime 十几天）**重启机器即可根治**，
-   不要给一个可消除的问题建工具。
+   **但先确认机器是否真的超订**——别用错指标（见下一条），确认了就先解决内存，不要给一个可消除的问题建工具。
+
+   **macOS 上判断内存压力，不要看 `free`，也不要用 `ps` 的 RSS：**
+   - `vm_stat` 的 `Pages free` 低是**设计使然**（macOS 拿空闲 RAM 做缓存）。它**不是**压力指标。
+   - `ps` 的 RSS **严重低报**已被压缩/映射的页。实测：Docker 的 VM 进程 `ps` 报 348 MB，
+     macOS 自己的 `top` 算是 **8198 MB**——差 23 倍。用 RSS 找内存大户会得出完全错误的结论。
+   - 正确的两把尺子：`top -l 1 -o mem -n 15 -stats pid,command,mem`（按 macOS 口径排序），
+     以及 `vm_stat` 里 **Pages occupied by compressor** / **Pages stored in compressor** 的比值。
+   - 典型超订症状：压缩器占物理内存数 GB、且「压缩前原始大小」是物理内存的 2–3 倍。
+     实测这台 16 GB 的机器工作集 **44.5 GB**、压缩比 5.5:1、累计换出 **569 GB**，
+     最大单一贡献是 **Docker Desktop VM 分配了 7.75 GiB 而容器只用 1.2 GB**。
 
 3. **补 workspace 链接时，相对路径要从符号链接所在的 `@scope/` 目录算，不是从 `node_modules/` 算。**
    链接落在 `pkg/node_modules/@deepseek-ai/<name>`，正确目标形如 `../../../../llm/llm-pi-ai`（4 层）；
