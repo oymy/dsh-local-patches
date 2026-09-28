@@ -1,0 +1,598 @@
+diff --git a/packages/llm/llm-pi-ai/README.i18n.yaml b/packages/llm/llm-pi-ai/README.i18n.yaml
+index c5fbc218d7c..84e0e88d8ca 100644
+--- a/packages/llm/llm-pi-ai/README.i18n.yaml
++++ b/packages/llm/llm-pi-ai/README.i18n.yaml
+@@ -2,5 +2,5 @@
+ # side as of the last confirmed-consistent state. Both languages carry equal authority;
+ # after editing either side, bring the other along and re-record with:
+ #   pnpm run verify-translation-pairing --write packages/llm/llm-pi-ai/README.md
+-README.md: 7b1708b957202369382d8a93b2bbcefd31565f67
+-README.zh.md: ed780ad235b1d8df2b821be6a0595ecd8b8e951b
++README.md: 9217e8a499e9fae6e0d34144634957a209dc0dfe
++README.zh.md: 96213d503a692639aa28979852e5576da2376424
+diff --git a/packages/llm/llm-pi-ai/README.md b/packages/llm/llm-pi-ai/README.md
+index 7b1708b9572..9217e8a499e 100644
+--- a/packages/llm/llm-pi-ai/README.md
++++ b/packages/llm/llm-pi-ai/README.md
+@@ -81,6 +81,7 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
+ | `models` | installed catalog | Replaces the route's catalog wholesale; each entry defaults from the installed model |
+ | `modelOverrides` | none | Reshapes individual installed-catalog models without replacing the rest |
+ | `compat` | catalog detection | Wire-compatibility switches for unrecognized endpoints |
++| `repeatReasoningBeforeEachToolCallModels` | `[]` | Models that replay each signed Responses prelude and interleave every call with its output |
+ | `defaultContextWindow` | `262,144` | Capacity fallback for undescribed models |
+ | `defaultMaxTokens` | `32,768` | Output-cap fallback for undescribed models |
+ | `requestImagePixelBudget` | `4,194,304` | Total-pixel budget for each deterministic request image |
+@@ -104,6 +105,8 @@ A profile's `models` list replaces the route's installed catalog rather than ext
+ 
+ For self-hosted Chat Completions endpoints, `thinkingTokenBudgetField` selects the reasoning-budget parameter, and `vllmPriority` sets an integer scheduler priority when the server enables priority scheduling. Template arguments accept `$var: thinking.budget`. `openai-responses` gateways can set `supportsMaxOutputTokens: false` to omit `max_output_tokens`; Azure and Codex transports ignore this shared compatibility field. These controls are opt-in; catalog-owned Anthropic effort and fallback capabilities are not configurable switches.
+ 
++An `openai-responses` route can add model IDs to `repeatReasoningBeforeEachToolCallModels` when its gateway requires each historical function call and matching output to be adjacent. For a completed multi-call response, the adapter repeats the signed reasoning plus any preceding commentary for each call, splits the assistant replay, and interleaves the matching result immediately after that call. This changes only the outgoing projection, not durable session content. Profile resolution rejects an unknown model or one using another protocol.
++
+ ### Change configuration at runtime
+ 
+ Each operation captures the current `providers` Config reference. New or changed provider profiles are validated before form persistence; unchanged catalog failures remain editable. Route-set or retry-policy changes update registration atomically, preserving previous routes if another adapter owns a requested route.
+diff --git a/packages/llm/llm-pi-ai/README.zh.md b/packages/llm/llm-pi-ai/README.zh.md
+index ed780ad235b..96213d503a6 100644
+--- a/packages/llm/llm-pi-ai/README.zh.md
++++ b/packages/llm/llm-pi-ai/README.zh.md
+@@ -81,6 +81,7 @@ kind: "package-reference"
+ | `models` | 已安装目录 | 整体替换路由目录；每个条目从已安装模型取默认值 |
+ | `modelOverrides` | 无 | 重塑个别已安装目录模型，而不替换其余模型 |
+ | `compat` | 目录检测 | 无法识别端点的协议兼容开关 |
++| `repeatReasoningBeforeEachToolCallModels` | `[]` | 需逐个回放带签名 Responses 前导段，并将每个调用与其输出交错排列的模型 |
+ | `defaultContextWindow` | `262,144` | 未描述模型的容量回退 |
+ | `defaultMaxTokens` | `32,768` | 未描述模型的输出上限回退 |
+ | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
+@@ -104,6 +105,8 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每
+ 
+ 对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。
+ 
++当 `openai-responses` 网关要求每个历史函数调用都与对应输出紧邻时，路由可以向 `repeatReasoningBeforeEachToolCallModels` 添加模型 ID。对于已完成的多调用响应，适配器会为每个调用重复带签名推理及其前置说明文字，拆分 assistant 回放，并把匹配结果紧跟在该调用后。这只改变发出的投影，不改变持久会话内容。Profile 解析会拒绝未知模型或使用其他协议的模型。
++
+ ### 运行时更改配置
+ 
+ 每次操作捕获当前 `providers` Config 引用。新增或修改的 provider 配置在表单持久化前验证；未更改的目录故障仍可编辑。路由集合或重试策略变化时原子更新注册；如果其他适配器已拥有所请求的路由，则保留先前路由。
+diff --git a/packages/llm/llm-pi-ai/src/adapter.ts b/packages/llm/llm-pi-ai/src/adapter.ts
+index de9f3e0e427..b6bb9e5a54c 100644
+--- a/packages/llm/llm-pi-ai/src/adapter.ts
++++ b/packages/llm/llm-pi-ai/src/adapter.ts
+@@ -58,7 +58,7 @@ import type {
+ import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+ import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
+ import type { ResolvedPiAiProviderProfile } from './config.ts'
+-import { toPiContext } from './context.ts'
++import { repeatReasoningBeforeEachToolCall, toPiContext } from './context.ts'
+ import { createModels, getSupportedThinkingLevels } from './models.ts'
+ import { toStreamChunks } from './stream.ts'
+ 
+@@ -366,7 +366,7 @@ export class PiAiAdapter extends LlmAdapter {
+       const onReplayDegrade = (reason: string): void => {
+         this.config.onReplayDegrade?.({ provider: options.provider, model: options.model, reason })
+       }
+-      const context = attachments === undefined
++      const baseContext = attachments === undefined
+         ? toPiContext(options, undefined, onReplayDegrade)
+         : await toPiContext({ ...options, signal: watchdog.signal }, {
+           attachments,
+@@ -377,6 +377,9 @@ export class PiAiAdapter extends LlmAdapter {
+             maxBytes: profile.requestImageMaxBytes,
+           },
+         }, onReplayDegrade)
++      const context = profile.repeatReasoningBeforeEachToolCallModels?.includes(options.model) === true
++        ? repeatReasoningBeforeEachToolCall(baseContext)
++        : baseContext
+       const events = snapshot.models.streamSimple(model, context, {
+         ...profileOptions(profile, reasoning, apiKey),
+         ...options.temperature === undefined ? {} : { temperature: options.temperature },
+diff --git a/packages/llm/llm-pi-ai/src/config.ts b/packages/llm/llm-pi-ai/src/config.ts
+index b07cd57bfb3..22054fd0f37 100644
+--- a/packages/llm/llm-pi-ai/src/config.ts
++++ b/packages/llm/llm-pi-ai/src/config.ts
+@@ -150,6 +150,13 @@ export interface PiAiProviderProfile {
+   defaultInput?: PiAiModality[]
+   /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
+   headers?: Record<string, string>
++  /**
++   * Models whose Responses history repeats the signed reasoning/text prelude
++   * before each tool call and interleaves matching tool outputs. Some
++   * DeepSeek-compatible gateways require every call/output pair to be adjacent.
++   * Every named model must use `openai-responses`.
++   */
++  repeatReasoningBeforeEachToolCallModels?: string[]
+   /** Provider-neutral pi-ai reasoning level. */
+   reasoning?: ModelThinkingLevel
+   /** Token budgets used by reasoning providers that support them. */
+@@ -335,6 +342,7 @@ const profile = z.object({
+   defaultMaxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
+   defaultInput: z.array(z.union(MODALITIES)).default([...DEFAULT_INPUT]),
+   headers: z.dict(z.string()),
++  repeatReasoningBeforeEachToolCallModels: z.array(z.string()),
+   reasoning: z.union(THINKING_LEVELS),
+   thinkingBudgets,
+   cacheRetention: z.union(['none', 'short', 'long']),
+@@ -475,6 +483,21 @@ export function resolveProfiles(
+         defaultMaxTokens: source.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
+       }, validation)
+       catalogError = catalog.modelErrors.values().next().value
++      for (const modelId of source.repeatReasoningBeforeEachToolCallModels ?? []) {
++        const replayModel = catalog.models.find(model => model.id === modelId)
++        if (replayModel === undefined) {
++          throw new Error(
++            `llm-pi-ai: provider "${provider}" repeatReasoningBeforeEachToolCallModels`
++            + ` names unknown model "${modelId}"`,
++          )
++        }
++        if (replayModel.api !== 'openai-responses') {
++          throw new Error(
++            `llm-pi-ai: provider "${provider}" repeatReasoningBeforeEachToolCallModels`
++            + ` names model "${modelId}", which uses "${replayModel.api}" instead of "openai-responses"`,
++          )
++        }
++      }
+       piProvider = buildProvider({
+         provider,
+         displayName,
+diff --git a/packages/llm/llm-pi-ai/src/context.ts b/packages/llm/llm-pi-ai/src/context.ts
+index 84bfeab4f35..fb799c3b456 100644
+--- a/packages/llm/llm-pi-ai/src/context.ts
++++ b/packages/llm/llm-pi-ai/src/context.ts
+@@ -14,7 +14,7 @@ import type {
+   ImageRequestTarget,
+   RequestImageAttachment,
+ } from '@deepseek-ai/dsh-attachment'
+-import type { Context as PiContext, ImageContent, Message as PiMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
++import type { AssistantMessage, Context as PiContext, ImageContent, Message as PiMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
+ import { toPiAssistant } from './replay.ts'
+ import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
+ import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
+@@ -206,6 +206,87 @@ function appendSystemOrAssistant(
+   return false
+ }
+ 
++/**
++ * Repeat the latest signed Responses prelude before each tool call in a
++ * contiguous run. The prelude contains the reasoning item and any assistant
++ * text emitted before the first call. DeepSeek-compatible gateways may bind
++ * that complete prelude to one call, so replaying only the reasoning item loses
++ * the following calls when commentary is present. Unsigned reasoning cannot
++ * reconstruct the native Responses item and therefore remains unchanged.
++ * @param context - converted pi-ai request context.
++ * @returns a context with affected assistant histories projected for replay.
++ */
++export function repeatReasoningBeforeEachToolCall(context: PiContext): PiContext {
++  let changed = false
++  const projected: PiMessage[] = []
++  for (const message of context.messages) {
++    if (message.role !== 'assistant') {
++      projected.push(message)
++      continue
++    }
++    let prelude: AssistantMessage['content'] | undefined
++    let firstToolSeen = false
++    let messageChanged = false
++    const content: AssistantMessage['content'] = []
++    for (const block of message.content) {
++      if (block.type === 'thinking') {
++        prelude = block.thinkingSignature === undefined ? undefined : [block]
++        firstToolSeen = false
++      } else if (block.type === 'text' && prelude !== undefined && !firstToolSeen) {
++        prelude.push(block)
++      } else if (block.type === 'toolCall') {
++        if (prelude !== undefined && firstToolSeen) {
++          content.push(...prelude)
++          changed = true
++          messageChanged = true
++        }
++        firstToolSeen = prelude !== undefined
++      }
++      content.push(block)
++    }
++    projected.push(messageChanged ? { ...message, content } : message)
++  }
++  if (!changed) return context
++
++  // DeepSeek's Responses endpoint currently requires each function call and
++  // its output to be adjacent in the flattened input array. pi-ai ordinarily
++  // emits all calls from an assistant message before all following results.
++  // Split a fully matched run so conversion produces call/output pairs while
++  // retaining the signed prelude before every call.
++  const messages: PiMessage[] = []
++  for (let index = 0; index < projected.length; index++) {
++    const message = projected[index] as PiMessage
++    if (message.role !== 'assistant') {
++      messages.push(message)
++      continue
++    }
++    const calls = message.content.filter(block => block.type === 'toolCall')
++    const results: Extract<PiMessage, { role: 'toolResult' }>[] = []
++    for (let resultIndex = index + 1; resultIndex < projected.length; resultIndex++) {
++      const candidate = projected[resultIndex] as PiMessage
++      if (candidate.role !== 'toolResult') break
++      results.push(candidate)
++    }
++    const resultsByCall = new Map(results.map(result => [result.toolCallId, result]))
++    if (calls.length < 2 || results.length !== calls.length
++      || calls.some(call => !resultsByCall.has(call.id))) {
++      messages.push(message)
++      continue
++    }
++    let segment: AssistantMessage['content'] = []
++    for (const block of message.content) {
++      segment.push(block)
++      if (block.type !== 'toolCall') continue
++      messages.push({ ...message, content: segment })
++      messages.push(resultsByCall.get(block.id) as Extract<PiMessage, { role: 'toolResult' }>)
++      segment = []
++    }
++    if (segment.length > 0) messages.push({ ...message, content: segment })
++    index += results.length
++  }
++  return { ...context, messages }
++}
++
+ function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: string) => void): PiContext {
+   assertSupportedHistory(options.messages)
+   const split = splitSystemPrompt(options)
+diff --git a/packages/llm/llm-pi-ai/tests/config.spec.ts b/packages/llm/llm-pi-ai/tests/config.spec.ts
+index fe667fe58d2..30deb1e51dd 100644
+--- a/packages/llm/llm-pi-ai/tests/config.spec.ts
++++ b/packages/llm/llm-pi-ai/tests/config.spec.ts
+@@ -55,6 +55,26 @@ describe('reasoning schema boundary', () => {
+       },
+     })).not.toThrow()
+   })
++
++  it('limits per-tool reasoning replay to Responses routes', () => {
++    expect(() => {
++      assertServiceable(routeWith({
++        api: 'openai-responses',
++        repeatReasoningBeforeEachToolCallModels: ['m'],
++      })() as Config)
++    }).not.toThrow()
++    expect(() => {
++      assertServiceable(routeWith({
++        repeatReasoningBeforeEachToolCallModels: ['m'],
++      })() as Config)
++    }).toThrow(/openai-completions.*instead of "openai-responses"/)
++    expect(() => {
++      assertServiceable(routeWith({
++        api: 'openai-responses',
++        repeatReasoningBeforeEachToolCallModels: ['missing'],
++      })() as Config)
++    }).toThrow(/unknown model "missing"/)
++  })
+ })
+ 
+ describe('modality schema boundary', () => {
+diff --git a/packages/llm/llm-pi-ai/tests/convert.spec.ts b/packages/llm/llm-pi-ai/tests/convert.spec.ts
+index 4ca36d762a1..65c8bb65a24 100644
+--- a/packages/llm/llm-pi-ai/tests/convert.spec.ts
++++ b/packages/llm/llm-pi-ai/tests/convert.spec.ts
+@@ -6,7 +6,7 @@ import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
+ import type { AssistantMessage, AssistantMessageEvent, Usage } from '@earendil-works/pi-ai'
+ import { transformMessages } from '@earendil-works/pi-ai/api/transform-messages'
+ import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
+-import { toPiContext } from '../src/context.ts'
++import { repeatReasoningBeforeEachToolCall, toPiContext } from '../src/context.ts'
+ import { toPiReplayState } from '../src/replay.ts'
+ import { mapStopReason, mapUsage, toStreamChunks } from '../src/stream.ts'
+ 
+@@ -404,6 +404,211 @@ describe('toPiContext', () => {
+     })
+   })
+ 
++  it('repeats signed Responses reasoning before additional tool calls', () => {
++    const reasoning = {
++      id: 'rs_1',
++      type: 'reasoning',
++      status: 'completed',
++      content: [{ type: 'reasoning_text', text: 'inspect both files' }],
++      encrypted_content: 'encrypted',
++    }
++    const state = toPiReplayState(assistant({
++      api: 'openai-responses',
++      provider: 'gateway',
++      model: 'deepseek-v4.1-flash',
++      stopReason: 'toolUse',
++      content: [
++        { type: 'thinking', thinking: 'inspect both files', thinkingSignature: JSON.stringify(reasoning) },
++        { type: 'toolCall', id: 'c1', name: 'read', arguments: { path: 'a' } },
++        { type: 'toolCall', id: 'c2', name: 'read', arguments: { path: 'b' } },
++        { type: 'toolCall', id: 'c3', name: 'read', arguments: { path: 'c' } },
++      ],
++    }))
++    const base = toPiContext({
++      provider: 'gateway',
++      model: 'deepseek-v4.1-flash',
++      messages: [createMessage({
++        role: 'assistant',
++        content: [
++          { type: 'reasoning', text: 'inspect both files' },
++          { type: 'tool-call', id: ToolCallId('c1'), name: 'read', arguments: '{"path":"a"}' },
++          { type: 'tool-call', id: ToolCallId('c2'), name: 'read', arguments: '{"path":"b"}' },
++          { type: 'tool-call', id: ToolCallId('c3'), name: 'read', arguments: '{"path":"c"}' },
++        ],
++        source: { kind: 'model', provider: 'gateway', model: 'deepseek-v4.1-flash', replayState: state },
++      })],
++    })
++
++    const projected = repeatReasoningBeforeEachToolCall(base)
++
++    expect((projected.messages[0] as AssistantMessage).content).toEqual([
++      { type: 'thinking', thinking: 'inspect both files', thinkingSignature: JSON.stringify(reasoning) },
++      { type: 'toolCall', id: 'c1', name: 'read', arguments: { path: 'a' } },
++      { type: 'thinking', thinking: 'inspect both files', thinkingSignature: JSON.stringify(reasoning) },
++      { type: 'toolCall', id: 'c2', name: 'read', arguments: { path: 'b' } },
++      { type: 'thinking', thinking: 'inspect both files', thinkingSignature: JSON.stringify(reasoning) },
++      { type: 'toolCall', id: 'c3', name: 'read', arguments: { path: 'c' } },
++    ])
++  })
++
++  it('repeats signed Responses reasoning when text separates it from a tool call', () => {
++    const reasoning = {
++      id: 'rs_1',
++      type: 'reasoning',
++      status: 'completed',
++      content: [{ type: 'reasoning_text', text: 'inspect both files' }],
++      encrypted_content: 'encrypted',
++    }
++    const signedReasoning = {
++      type: 'thinking' as const,
++      thinking: 'inspect both files',
++      thinkingSignature: JSON.stringify(reasoning),
++    }
++    const context = {
++      messages: [assistant({
++        content: [
++          signedReasoning,
++          { type: 'text', text: 'I will inspect both files.' },
++          { type: 'toolCall', id: 'c1', name: 'read', arguments: { path: 'a' } },
++          { type: 'toolCall', id: 'c2', name: 'read', arguments: { path: 'b' } },
++        ],
++      })],
++    }
++
++    expect((repeatReasoningBeforeEachToolCall(context).messages[0] as AssistantMessage).content).toEqual([
++      signedReasoning,
++      { type: 'text', text: 'I will inspect both files.' },
++      { type: 'toolCall', id: 'c1', name: 'read', arguments: { path: 'a' } },
++      signedReasoning,
++      { type: 'text', text: 'I will inspect both files.' },
++      { type: 'toolCall', id: 'c2', name: 'read', arguments: { path: 'b' } },
++    ])
++  })
++
++  it('interleaves each replayed call with its matching tool result', () => {
++    const signedReasoning = {
++      type: 'thinking' as const,
++      thinking: 'inspect both files',
++      thinkingSignature: JSON.stringify({
++        id: 'rs_1', type: 'reasoning', status: 'completed',
++        content: [{ type: 'reasoning_text', text: 'inspect both files' }],
++        encrypted_content: 'encrypted',
++      }),
++    }
++    const firstResult = {
++      role: 'toolResult' as const,
++      toolCallId: 'c1',
++      toolName: 'read',
++      content: [{ type: 'text' as const, text: 'a' }],
++      isError: false,
++      timestamp: 0,
++    }
++    const secondResult = {
++      role: 'toolResult' as const,
++      toolCallId: 'c2',
++      toolName: 'read',
++      content: [{ type: 'text' as const, text: 'b' }],
++      isError: false,
++      timestamp: 0,
++    }
++    const context = {
++      messages: [
++        { role: 'user' as const, content: 'start', timestamp: 0 },
++        assistant({
++          content: [
++            signedReasoning,
++            { type: 'text', text: 'I will inspect both files.' },
++            { type: 'toolCall', id: 'c1', name: 'read', arguments: { path: 'a' } },
++            { type: 'toolCall', id: 'c2', name: 'read', arguments: { path: 'b' } },
++            { type: 'text', text: 'Calls submitted.' },
++          ],
++        }),
++        firstResult,
++        secondResult,
++        { role: 'user' as const, content: 'continue', timestamp: 0 },
++        assistant({
++          content: [
++            signedReasoning,
++            { type: 'toolCall', id: 'c3', name: 'read', arguments: { path: 'c' } },
++          ],
++        }),
++      ],
++    }
++
++    const projected = repeatReasoningBeforeEachToolCall(context)
++
++    expect(projected.messages).toHaveLength(8)
++    expect(projected.messages[0]).toBe(context.messages[0])
++    expect((projected.messages[1] as AssistantMessage).content).toEqual([
++      signedReasoning,
++      { type: 'text', text: 'I will inspect both files.' },
++      { type: 'toolCall', id: 'c1', name: 'read', arguments: { path: 'a' } },
++    ])
++    expect(projected.messages[2]).toBe(firstResult)
++    expect((projected.messages[3] as AssistantMessage).content).toEqual([
++      signedReasoning,
++      { type: 'text', text: 'I will inspect both files.' },
++      { type: 'toolCall', id: 'c2', name: 'read', arguments: { path: 'b' } },
++    ])
++    expect(projected.messages[4]).toBe(secondResult)
++    expect((projected.messages[5] as AssistantMessage).content).toEqual([
++      { type: 'text', text: 'Calls submitted.' },
++    ])
++    expect(projected.messages[6]).toBe(context.messages[4])
++    expect(projected.messages[7]).toBe(context.messages[5])
++  })
++
++  it('does not interleave an equally sized set of mismatched tool results', () => {
++    const reasoning = { type: 'thinking' as const, thinking: 'work', thinkingSignature: 'signed' }
++    const message = assistant({
++      content: [
++        reasoning,
++        { type: 'toolCall', id: 'c1', name: 'read', arguments: {} },
++        { type: 'toolCall', id: 'c2', name: 'read', arguments: {} },
++      ],
++    })
++    const context = {
++      messages: [
++        message,
++        { role: 'toolResult' as const, toolCallId: 'c1', toolName: 'read', content: [], isError: false, timestamp: 0 },
++        { role: 'toolResult' as const, toolCallId: 'other', toolName: 'read', content: [], isError: false, timestamp: 0 },
++      ],
++    }
++
++    const projected = repeatReasoningBeforeEachToolCall(context)
++
++    expect(projected.messages[0]).not.toBe(message)
++    expect(projected.messages).toHaveLength(3)
++    expect(projected.messages.slice(1)).toEqual(context.messages.slice(1))
++  })
++
++  it('leaves single calls and unsigned reasoning unchanged', () => {
++    const single = {
++      messages: [assistant({
++        content: [
++          { type: 'thinking', thinking: 'one', thinkingSignature: 'signed' },
++          { type: 'toolCall', id: 'c1', name: 'f', arguments: {} },
++        ],
++      })],
++    }
++    const unsigned = {
++      messages: [
++        { role: 'user' as const, content: 'start', timestamp: 0 },
++        assistant({
++          content: [
++            { type: 'thinking', thinking: 'two' },
++            { type: 'text', text: 'calling' },
++            { type: 'toolCall', id: 'c1', name: 'f', arguments: {} },
++            { type: 'toolCall', id: 'c2', name: 'f', arguments: {} },
++          ],
++        }),
++      ],
++    }
++
++    expect(repeatReasoningBeforeEachToolCall(single)).toBe(single)
++    expect(repeatReasoningBeforeEachToolCall(unsigned)).toBe(unsigned)
++  })
++
+   it.each(['high', ''])('preserves provider thinking level %j through durable projection and replay', (providerThinkingLevel) => {
+     const state = toPiReplayState(assistant({
+       api: 'anthropic-messages',
+diff --git a/packages/llm/llm-pi-ai/tests/responses-replay.spec.ts b/packages/llm/llm-pi-ai/tests/responses-replay.spec.ts
+new file mode 100644
+index 00000000000..41b44abfcac
+--- /dev/null
++++ b/packages/llm/llm-pi-ai/tests/responses-replay.spec.ts
+@@ -0,0 +1,101 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { createMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
++import type { StreamChunk } from '@deepseek-ai/dsh-llm'
++import type { Context as PiContext } from '@earendil-works/pi-ai'
++
++const streamSimple = vi.hoisted(() => vi.fn())
++
++vi.mock('@earendil-works/pi-ai/api/openai-responses.lazy', () => ({
++  openAIResponsesApi: () => ({ stream: streamSimple, streamSimple }),
++}))
++
++import { PiAiAdapter } from '../src/adapter.ts'
++import { resolveProfiles } from '../src/config.ts'
++import { memoryAuth } from './auth-double.ts'
++
++afterEach(() => { streamSimple.mockReset() })
++
++function adapter(): PiAiAdapter {
++  return new PiAiAdapter({
++    profiles: () => resolveProfiles({
++      gateway: {
++        api: 'openai-responses',
++        baseURL: 'http://127.0.0.1:9/v1',
++        models: [{ id: 'deepseek-v4.1-flash', contextWindow: 8192, maxTokens: 1024 }],
++        repeatReasoningBeforeEachToolCallModels: ['deepseek-v4.1-flash'],
++      },
++    }),
++    resolveApiKey: () => Promise.resolve('test-key'),
++    auth: memoryAuth(),
++  })
++}
++
++async function drain(value: PiAiAdapter): Promise<StreamChunk[]> {
++  const reasoning = JSON.stringify({
++    id: 'rs_1', type: 'reasoning', status: 'completed',
++    content: [{ type: 'reasoning_text', text: 'inspect both files' }],
++    encrypted_content: 'encrypted',
++  })
++  const chunks: StreamChunk[] = []
++  for await (const chunk of value.stream({
++    provider: 'gateway',
++    model: 'deepseek-v4.1-flash',
++    messages: [
++      createMessage({
++        role: 'assistant',
++        content: [
++          { type: 'reasoning', text: 'inspect both files' },
++          { type: 'tool-call', id: ToolCallId('c1'), name: 'read', arguments: '{"path":"a"}' },
++          { type: 'tool-call', id: ToolCallId('c2'), name: 'read', arguments: '{"path":"b"}' },
++        ],
++        source: {
++          kind: 'model', provider: 'gateway', model: 'deepseek-v4.1-flash',
++          replayState: {
++            response: {
++              kind: 'pi-ai', version: 2, api: 'openai-responses', provider: 'gateway',
++              model: 'deepseek-v4.1-flash', stopReason: 'toolUse',
++            },
++            blocks: [
++              { type: 'reasoning', thinkingSignature: reasoning },
++              { type: 'tool-call' },
++              { type: 'tool-call' },
++            ],
++          },
++        },
++      }),
++      createToolResultMessage({
++        callId: ToolCallId('c1'),
++        content: [{ type: 'text', text: 'a' }],
++        isError: false,
++      }),
++      createToolResultMessage({
++        callId: ToolCallId('c2'),
++        content: [{ type: 'text', text: 'b' }],
++        isError: false,
++      }),
++    ],
++  })) chunks.push(chunk)
++  return chunks
++}
++
++describe('Responses reasoning replay', () => {
++  it('projects configured multi-tool history at the SDK boundary', async () => {
++    streamSimple.mockImplementation(() => { throw new Error('inspect request') })
++
++    await drain(adapter())
++
++    const context = streamSimple.mock.calls[0]?.[1] as PiContext | undefined
++    expect(context?.messages.map(message => message.role)).toEqual([
++      'assistant', 'toolResult', 'assistant', 'toolResult',
++    ])
++    const [firstCall, firstResult, secondCall, secondResult] = context?.messages ?? []
++    if (firstCall?.role !== 'assistant' || secondCall?.role !== 'assistant'
++      || firstResult?.role !== 'toolResult' || secondResult?.role !== 'toolResult') {
++      throw new Error('expected interleaved request history')
++    }
++    expect(firstCall.content.map(block => block.type)).toEqual(['thinking', 'toolCall'])
++    expect(firstResult.toolCallId).toBe('c1')
++    expect(secondCall.content.map(block => block.type)).toEqual(['thinking', 'toolCall'])
++    expect(secondResult.toolCallId).toBe('c2')
++  })
++})

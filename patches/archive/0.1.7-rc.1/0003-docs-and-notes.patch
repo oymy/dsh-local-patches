@@ -1,0 +1,144 @@
+diff --git a/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.i18n.yaml b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.i18n.yaml
+new file mode 100644
+index 0000000000..2800798c5e
+--- /dev/null
++++ b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.i18n.yaml
+@@ -0,0 +1,6 @@
++# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
++# side as of the last confirmed-consistent state. Both languages carry equal authority;
++# after editing either side, bring the other along and re-record with:
++#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.md
++2026-09-18-responses-multi-tool-reasoning-replay.md: a149314048e84cee782656c8523334325c8a3e69
++2026-09-18-responses-multi-tool-reasoning-replay.zh.md: 616d9267606acb82f3b5db13626f4db5ca3cdb5a
+diff --git a/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.md b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.md
+new file mode 100644
+index 0000000000..a149314048
+--- /dev/null
++++ b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.md
+@@ -0,0 +1,27 @@
++# Agent Note: Responses multi-tool reasoning replay
++
++Status: implemented
++
++English | [中文](2026-09-18-responses-multi-tool-reasoning-replay.zh.md)
++
++## Problem
++
++Some DeepSeek-compatible Responses gateways require every historical `function_call` to be immediately followed by its matching `function_call_output`. pi-ai normally flattens one assistant response as all reasoning, commentary, and calls, then appends all following tool results. A multi-call turn therefore becomes `call1, call2, output1, output2`, and the gateway reports `No tool output found for tool call call1` even though that output is present later.
++
++## Decision
++
++The pi-ai provider profile exposes `repeatReasoningBeforeEachToolCallModels` as an opt-in model list restricted to `openai-responses`. Before dispatch for a named model, the adapter projects a completed multi-call turn as `signed prelude, call1, output1, signed prelude, call2, output2`. The prelude contains the complete native `thinkingSignature`, including encrypted content, plus commentary emitted before the first call. The durable session message remains unchanged.
++
++Unsigned reasoning cannot reconstruct a native Responses item and is not repeated. Projection occurs only when every call in the run has a matching result, so incomplete histories are left intact. Single-call turns and every route using another protocol retain their existing request history.
++
++## Alternatives considered
++
++**Change every Responses request.** Standard OpenAI-compatible endpoints do not require the duplicate item, so unconditional projection could introduce invalid repeated item identifiers or change cache behavior.
++
++**Patch the installed pi-ai package.** A package-manager patch does not propagate to consumers of the published Harness packages, and editing `node_modules` disappears on reinstall.
++
++**Disable parallel tool calls.** DeepSeek-compatible gateways may ignore that request option, and serial model behavior does not repair existing multi-call history.
++
++## Consequences
++
++Deployments must list only models served by a gateway with this validation rule. The session log remains the source of the original response; the configured route deterministically projects adjacent call/output pairs. Unit coverage pins commentary preludes, unsigned reasoning, result matching, multi-call ordering, unknown-model and protocol validation, and adapter-dispatch behavior.
+diff --git a/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.zh.md b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.zh.md
+new file mode 100644
+index 0000000000..616d926760
+--- /dev/null
++++ b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.zh.md
+@@ -0,0 +1,27 @@
++# Agent Note: Responses 多工具推理回放
++
++Status: implemented
++
++[English](2026-09-18-responses-multi-tool-reasoning-replay.md) | 中文
++
++## Problem
++
++部分 DeepSeek 兼容 Responses 网关要求每个历史 `function_call` 后面必须紧跟对应的 `function_call_output`。pi-ai 通常先把一个 assistant 响应展平为全部推理、说明文字和调用，再追加后续全部工具结果。多调用轮次因而变成 `call1, call2, output1, output2`；即使 `output1` 稍后存在，网关仍会报告 `No tool output found for tool call call1`。
++
++## Decision
++
++pi-ai 提供方 profile 公开 `repeatReasoningBeforeEachToolCallModels` 作为仅限 `openai-responses` 的显式启用模型列表。在为列表中的模型分派前，适配器会把已完成的多调用轮次投影为 `带签名前导段, call1, output1, 带签名前导段, call2, output2`。前导段包含完整原生 `thinkingSignature`（含加密内容）以及首个调用前输出的说明文字。持久会话消息保持不变。
++
++无签名推理无法重建原生 Responses 项，因此不会重复。只有该轮每个调用都有匹配结果时才会投影，不完整历史保持原样。单调用轮次以及使用其他协议的所有路由都保留现有请求历史。
++
++## Alternatives considered
++
++**修改所有 Responses 请求。** 标准 OpenAI 兼容端点不要求重复项，因此无条件投影可能引入无效的重复项标识符或改变缓存行为。
++
++**修补已安装的 pi-ai 包。** 包管理器补丁不会传播给已发布 Harness 包的使用者，直接编辑 `node_modules` 也会在重新安装时丢失。
++
++**禁用并行工具调用。** DeepSeek 兼容网关可能忽略该请求选项，而且串行模型行为无法修复已经存在的多调用历史。
++
++## Consequences
++
++部署只能列出由具有此校验规则的网关提供的模型。会话日志仍是原始响应的真源；已配置路由以确定性方式投影相邻的调用/输出对。单元测试固定了说明文字前导段、无签名推理、结果匹配、多调用排序、未知模型与协议校验，以及适配器分派行为。
+diff --git a/docs/config-catalog.i18n.yaml b/docs/config-catalog.i18n.yaml
+index 4c969b9423..09ef1164c9 100644
+--- a/docs/config-catalog.i18n.yaml
++++ b/docs/config-catalog.i18n.yaml
+@@ -2,5 +2,5 @@
+ # side as of the last confirmed-consistent state. Both languages carry equal authority;
+ # after editing either side, bring the other along and re-record with:
+ #   pnpm run verify-translation-pairing --write docs/config-catalog.md
+-config-catalog.md: eb63c85c48d91bc9a79ebd909f2e0acd3a406d26
+-config-catalog.zh.md: cdbfb07a2ecda96c8df282b8c49ec59ec34d8401
++config-catalog.md: 50114b3b47da2d764b15c9fdfe3f3f1a2815d49d
++config-catalog.zh.md: 658d678fd9a377b3067f1bcdea9f1cb3094c1e3f
+diff --git a/docs/config-catalog.md b/docs/config-catalog.md
+index eb63c85c48..50114b3b47 100644
+--- a/docs/config-catalog.md
++++ b/docs/config-catalog.md
+@@ -1604,6 +1604,13 @@ export interface PiAiProviderProfile {
+   defaultInput?: PiAiModality[]
+   /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
+   headers?: Record<string, string>
++  /**
++   * Models whose Responses history repeats the signed reasoning/text prelude
++   * before each tool call and interleaves matching tool outputs. Some
++   * DeepSeek-compatible gateways require every call/output pair to be adjacent.
++   * Every named model must use `openai-responses`.
++   */
++  repeatReasoningBeforeEachToolCallModels?: string[]
+   /** Provider-neutral pi-ai reasoning level. */
+   reasoning?: ModelThinkingLevel
+   /** Token budgets used by reasoning providers that support them. */
+@@ -1798,7 +1805,7 @@ export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['
+ 
+ Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
+ 
+-Source: [`packages/llm/llm-pi-ai/src/config.ts:222`](../packages/llm/llm-pi-ai/src/config.ts)
++Source: [`packages/llm/llm-pi-ai/src/config.ts:229`](../packages/llm/llm-pi-ai/src/config.ts)
+ 
+ <a id="deepseek-aidsh-llm-replay"></a>
+ 
+diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
+index cdbfb07a2e..658d678fd9 100644
+--- a/docs/config-catalog.zh.md
++++ b/docs/config-catalog.zh.md
+@@ -1606,6 +1606,13 @@ export interface PiAiProviderProfile {
+   defaultInput?: PiAiModality[]
+   /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
+   headers?: Record<string, string>
++  /**
++   * Models whose Responses history repeats the signed reasoning/text prelude
++   * before each tool call and interleaves matching tool outputs. Some
++   * DeepSeek-compatible gateways require every call/output pair to be adjacent.
++   * Every named model must use `openai-responses`.
++   */
++  repeatReasoningBeforeEachToolCallModels?: string[]
+   /** Provider-neutral pi-ai reasoning level. */
+   reasoning?: ModelThinkingLevel
+   /** Token budgets used by reasoning providers that support them. */
+@@ -1800,7 +1807,7 @@ export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['
+ 
+ Depends on: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
+ 
+-来源： [`packages/llm/llm-pi-ai/src/config.ts:222`](../packages/llm/llm-pi-ai/src/config.ts)
++来源： [`packages/llm/llm-pi-ai/src/config.ts:229`](../packages/llm/llm-pi-ai/src/config.ts)
+ 
+ <a id="deepseek-aidsh-llm-replay"></a>
+ 

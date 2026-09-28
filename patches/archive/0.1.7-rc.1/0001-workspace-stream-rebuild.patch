@@ -1,0 +1,217 @@
+diff --git a/packages/api/workspace-controller/src/client/index.ts b/packages/api/workspace-controller/src/client/index.ts
+index 84a469ec07..cd39a00866 100644
+--- a/packages/api/workspace-controller/src/client/index.ts
++++ b/packages/api/workspace-controller/src/client/index.ts
+@@ -6,6 +6,7 @@ import {
+   RemoteStreamCarrierError,
+   type ClientRemote,
+ } from '@deepseek-ai/dsh-api-gateway/client'
++import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+ import type { WorkspaceFollowFrame, WorkspaceFollowIncrement } from '../types.ts'
+ import type { WorkspaceFollowSink } from './model.ts'
+ import { ClientWorkspaceModel } from './model.ts'
+@@ -37,8 +38,13 @@ declare module '@deepseek-ai/cordis' {
+   }
+ }
+ 
+-/** Required Client Remote services. */
+-export const inject = ['remote', 'remote.workspace']
++/** Required Client Remote and Connection services. */
++export const inject = ['connection', 'remote', 'remote.workspace']
++
++/** Backoff base for rebuilding a terminally failed Workspace state stream. */
++const REBUILD_BASE_MS = 500
++/** Backoff ceiling for rebuilding a terminally failed Workspace state stream. */
++const REBUILD_MAX_MS = 15_000
+ 
+ /**
+  * Install Client Workspace state, commands, and reconnecting follow control.
+@@ -47,14 +53,117 @@ export const inject = ['remote', 'remote.workspace']
+ export function apply(ctx: Context): void {
+   const model = new ClientWorkspaceModel(ctx.remote.workspace)
+   new WorkspaceController(ctx, model)
+-  const control = createWorkspaceStateStream(ctx.remote, {
+-    accept: model,
+-    carrierFailed: () => { model.handleCarrierFailure() },
+-    failed: (error) => { model.handleStreamFailure(error) },
+-  })
+-  control.start()
++  const connection = ctx.get('connection') as ConnectionHandle
++
++  let control: WorkspaceStateStream | undefined
++  let retryTimer: ReturnType<typeof setTimeout> | undefined
++  let attempt = 0
++  let terminal = false
++  let stopped = false
++  // The generation whose baseline the follow is already serving. Initialised
++  // from the live Connection so the very first readiness — which the stream's
++  // own retry path already covers — is not mistaken for a replacement.
++  let generationId: number | undefined = connection.generation.getSnapshot()?.id
++
++  /** Reset backoff as soon as a generation publishes a baseline again. */
++  const accept: WorkspaceFollowSink = {
++    replaceBaseline: (value) => {
++      attempt = 0
++      model.replaceBaseline(value)
++    },
++    upsertView: (value) => { model.upsertView(value) },
++    removeView: (value) => { model.removeView(value) },
++    replaceOrder: (value) => { model.replaceOrder(value) },
++    replaceArchived: (value) => { model.replaceArchived(value) },
++    replacePinned: (value) => { model.replacePinned(value) },
++  }
++
++  function start(): void {
++    if (stopped) return
++    terminal = false
++    control = createWorkspaceStateStream(ctx.remote, {
++      accept,
++      carrierFailed: () => { model.handleCarrierFailure() },
++      failed: (error) => {
++        // A terminal failure ends the snapshot consumer loop and aborts the
++        // stream's lifetime, so `restart()` can never revive it. Without a
++        // rebuild the projection stays frozen on its last baseline while
++        // `phase` still reads 'ready', and Session ownership silently stops
++        // catching up. Schedule before publishing: `handleStreamFailure`
++        // rethrows a non-Remote protocol failure.
++        terminal = true
++        scheduleRebuild(error)
++        model.handleStreamFailure(error)
++      },
++    })
++    control.start()
++  }
++
++  /** Replace the follow control, dropping whatever generation it carried. */
++  async function rebuild(): Promise<void> {
++    if (stopped) return
++    const previous = control
++    control = undefined
++    if (retryTimer !== undefined) {
++      clearTimeout(retryTimer)
++      retryTimer = undefined
++    }
++    await previous?.dispose().catch(() => {})
++    start()
++  }
++
++  function scheduleRebuild(error: unknown): void {
++    if (stopped || retryTimer !== undefined) return
++    const delay = Math.min(REBUILD_BASE_MS * 2 ** attempt, REBUILD_MAX_MS)
++    attempt++
++    console.warn(
++      `workspace-controller: state stream failed (${String(error)}); rebuilding in ${delay}ms`,
++    )
++    const timer = setTimeout(() => {
++      retryTimer = undefined
++      void rebuild()
++    }, delay)
++    // The DOM lib types `setTimeout` as `number`, but a Node-hosted Client
++    // (tests, desktop) hands back a `Timeout`; unref keeps a pending recovery
++    // from holding that process open on its own.
++    ;(timer as { unref?: () => void }).unref?.()
++    retryTimer = timer
++  }
++
++  // A replacement Connection generation means every physical stream the previous
++  // one carried is gone. Session-controller restarts its control stream on this
++  // same signal; the Workspace follow has to do the same, otherwise its
++  // projection keeps the pre-reconnect baseline and Session ownership never
++  // catches up.
++  const connected = (): void => {
++    const generation = connection.generation.getSnapshot()
++    if (generation === undefined) return
++    if (generation.id === generationId) return
++    const first = generationId === undefined
++    generationId = generation.id
++    if (terminal) {
++      void rebuild()
++      return
++    }
++    // The stream's own retry path waits for the first ready generation, so
++    // re-opening here would only duplicate the generation it is already opening.
++    if (first) return
++    attempt = 0
++    control?.restart()
++    control?.start()
++  }
++
++  start()
++  ctx.effect(
++    () => connection.generation.subscribe(connected),
++    'workspace-controller.client.generation',
++  )
+   ctx.effect(
+-    () => async () => { await control.dispose() },
++    () => async () => {
++      stopped = true
++      if (retryTimer !== undefined) clearTimeout(retryTimer)
++      await control?.dispose()
++    },
+     'workspace-controller.client.control',
+   )
+ }
+diff --git a/packages/api/workspace-controller/tests/transport.client.spec.ts b/packages/api/workspace-controller/tests/transport.client.spec.ts
+index 8d93e56851..89c98e04c9 100644
+--- a/packages/api/workspace-controller/tests/transport.client.spec.ts
++++ b/packages/api/workspace-controller/tests/transport.client.spec.ts
+@@ -101,12 +101,16 @@ describe('Workspace Controller Client apply', () => {
+     })
+   })
+ 
+-  pluginTest('publishes exhausted carrier retries as a gateway/internal error state', async ({ mock, start }) => {
++  pluginTest('publishes exhausted carrier retries as an error state, then rebuilds the stream', async ({ mock, start }) => {
+     // Neither generation reaches an accepted baseline, so the retry budget runs
+     // out and the escaping carrier failure crosses the stream boundary marked.
+     const client = await pluginClient(mock, start, followGenerations([
+       carrierLoss('generation lost'),
+       carrierLoss('generation lost again'),
++      // The exhausted failure ends the stream's only consumer loop for good, so
++      // the plugin rebuilds the whole control instead of leaving the projection
++      // frozen on its last baseline for the rest of the page's life.
++      openStream([baseline('recovered')]),
+     ]))
+     await vi.waitFor(() => {
+       expect(client.ctx.workspaces.list.getSnapshot()).toMatchObject({
+@@ -115,6 +119,41 @@ describe('Workspace Controller Client apply', () => {
+       })
+     })
+     expect(streamStates(client.mock)).toEqual(['failed', 'failed'])
++
++    await vi.waitFor(() => {
++      expect(client.ctx.workspaces.list.getSnapshot()).toMatchObject({
++        state: 'idle',
++        phase: 'ready',
++        items: [{ workspaceId: 'recovered' }],
++      })
++    }, { timeout: 5_000 })
++    expect(streamStates(client.mock)).toEqual(['failed', 'failed', 'open'])
++  })
++
++  pluginTest('restarts the follow on a new Connection generation', async ({ mock, start }) => {
++    // A reconnect replaces every physical stream the previous Connection carried.
++    // Without this hook the follow keeps its pre-reconnect baseline while a
++    // sibling stream (Sessions) catches up, so a Session created afterwards is
++    // never projected and its owning Workspace never gains the row.
++    const client = await pluginClient(mock, start, followGenerations([
++      openStream([baseline('first')]),
++      openStream([baseline('second')]),
++    ]))
++    await vi.waitFor(() => {
++      expect(client.ctx.workspaces.list.getSnapshot()).toMatchObject({
++        items: [{ workspaceId: 'first' }],
++      })
++    })
++
++    client.connection.reconnect()
++    await mock.streams.opened(FOLLOW, 2)
++    await vi.waitFor(() => {
++      expect(client.ctx.workspaces.list.getSnapshot()).toMatchObject({
++        state: 'idle',
++        phase: 'ready',
++        items: [{ workspaceId: 'second' }],
++      })
++    })
+   })
+ 
+   pluginTest('marks carrier loss while retrying and publishes a later protocol failure', async ({ mock, start }) => {
