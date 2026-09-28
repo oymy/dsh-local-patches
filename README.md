@@ -266,4 +266,10 @@ scripts/restart-web.sh       延迟 + 自我脱离的重启
 
 ## License
 
-补丁源自 MIT 许可的 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)，本仓库同样以 MIT 发布。
+MIT（见 [`LICENSE`](LICENSE)）。
+
+补丁源自 MIT 许可的 [deepseek-ai/deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)
+（Copyright (c) 2026 DeepSeek），本仓库以同样的 MIT 条款发布。
+
+> 派生声明刻意放在 README 而**不是** `LICENSE` 里：GitHub 用文本模板匹配许可证，
+> 在标准 MIT 正文前后插入任何段落都会让它识别失败并显示 `NOASSERTION`。
