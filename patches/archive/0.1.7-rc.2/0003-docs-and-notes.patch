@@ -1,28 +1,15 @@
 diff --git a/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.i18n.yaml b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.i18n.yaml
 new file mode 100644
-index 0000000000..8258106306
+index 0000000000..2800798c5e
 --- /dev/null
 +++ b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.i18n.yaml
-@@ -0,0 +1,19 @@
-+# Bilingual-pair consistency record for 2026-09-18-responses-multi-tool-reasoning-replay.md (docs/i18n/README.md): per heading
-+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
-+# After editing either side, bring the other along and re-record with:
+@@ -0,0 +1,6 @@
++# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
++# side as of the last confirmed-consistent state. Both languages carry equal authority;
++# after editing either side, bring the other along and re-record with:
 +#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.md
-+/agent-note-responses-multi-tool-reasoning-replay:
-+  en: 0f190999a141ab28
-+  zh: 2044c26a27d3bec8
-+/agent-note-responses-multi-tool-reasoning-replay/problem:
-+  en: c140856481cbbe91
-+  zh: 9df4c38206afd0c3
-+/agent-note-responses-multi-tool-reasoning-replay/decision:
-+  en: 20499a5db4895b12
-+  zh: b3610ed884fef0de
-+/agent-note-responses-multi-tool-reasoning-replay/alternatives-considered:
-+  en: 95e90017a0987d92
-+  zh: b700b84b60f81bb7
-+/agent-note-responses-multi-tool-reasoning-replay/consequences:
-+  en: 2cbb68f25e29632f
-+  zh: 3d2912b7bb03d46e
++2026-09-18-responses-multi-tool-reasoning-replay.md: a149314048e84cee782656c8523334325c8a3e69
++2026-09-18-responses-multi-tool-reasoning-replay.zh.md: 616d9267606acb82f3b5db13626f4db5ca3cdb5a
 diff --git a/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.md b/.agents/notes/implemented/bug-fix/2026-09-18-responses-multi-tool-reasoning-replay.md
 new file mode 100644
 index 0000000000..a149314048
@@ -90,10 +77,10 @@ index 0000000000..616d926760
 +
 +部署只能列出由具有此校验规则的网关提供的模型。会话日志仍是原始响应的真源；已配置路由以确定性方式投影相邻的调用/输出对。单元测试固定了说明文字前导段、无签名推理、结果匹配、多调用排序、未知模型与协议校验，以及适配器分派行为。
 diff --git a/docs/config-catalog.md b/docs/config-catalog.md
-index 162fff2e57..0b6d0b58b9 100644
+index 7978a4afaf..2b405c5785 100644
 --- a/docs/config-catalog.md
 +++ b/docs/config-catalog.md
-@@ -1600,7 +1600,7 @@ export interface Config extends ProtocolConfig {
+@@ -1579,7 +1579,7 @@ export interface Config extends ProtocolConfig {
  
  - `inject`: `llm`
  - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
@@ -102,7 +89,7 @@ index 162fff2e57..0b6d0b58b9 100644
  
  ```ts config-catalog
  /** Plugin configuration: the provider routes this instance owns. */
-@@ -1675,6 +1675,13 @@ export interface PiAiProviderProfile {
+@@ -1654,6 +1654,13 @@ export interface PiAiProviderProfile {
    defaultInput?: PiAiModality[]
    /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
    headers?: Record<string, string>
@@ -117,10 +104,10 @@ index 162fff2e57..0b6d0b58b9 100644
    reasoning?: ModelThinkingLevel
    /** Token budgets used by reasoning providers that support them. */
 diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
-index 72bab78412..557ca64abf 100644
+index 12383e538d..3418629da9 100644
 --- a/docs/config-catalog.zh.md
 +++ b/docs/config-catalog.zh.md
-@@ -1602,7 +1602,7 @@ export interface Config extends ProtocolConfig {
+@@ -1581,7 +1581,7 @@ export interface Config extends ProtocolConfig {
  
  - `inject`: `llm`
  - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
@@ -129,7 +116,7 @@ index 72bab78412..557ca64abf 100644
  
  ```ts config-catalog
  /** Plugin configuration: the provider routes this instance owns. */
-@@ -1677,6 +1677,13 @@ export interface PiAiProviderProfile {
+@@ -1656,6 +1656,13 @@ export interface PiAiProviderProfile {
    defaultInput?: PiAiModality[]
    /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
    headers?: Record<string, string>

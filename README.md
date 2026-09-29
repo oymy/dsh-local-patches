@@ -4,7 +4,7 @@
 
 本仓库**只装补丁和脚本，不装 DSH 源码**。升级时从上游拉取，打完补丁再构建。
 
-> **`patches/` 当前面向 `0.1.7-rc.2`**（最近一次已在生产验过的版本）。
+> **`patches/` 当前面向 `0.2.0-rc.1`**（`next` 通道；`latest` 当时仍停在 `0.1.7-rc.2`）。
 > 历史版本补丁在 `patches/archive/<version>/`。补丁只对各自目标版本有效，跨版本用前先 `probe.sh`。
 
 ---
@@ -165,7 +165,8 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 
 | DSH 版本 | 补丁集 | 移植分支 | 测试 |
 |---|---|---|---|
-| `0.1.7-rc.2`（当前） | `patches/` | `port/0.1.7-rc.2` @ `973dbf43ed` | 20 文件 / 417 用例 |
+| `0.2.0-rc.1`（当前，`next`） | `patches/` | `port/0.2.0-rc.1` @ `7c3e08e3e0` | 20 文件 / 417 用例 |
+| `0.1.7-rc.2` | `patches/archive/0.1.7-rc.2` | `port/0.1.7-rc.2` @ `973dbf43ed` | 20 文件 / 417 用例 |
 | `0.1.7-rc.1` | `patches/archive/0.1.7-rc.1` | `port/0.1.7-rc.1` @ `071343ae62` | 20 文件 / 429 用例 |
 | `0.1.7-alpha.2` | `patches/archive/0.1.7-alpha.2` | `port/0.1.7` @ `58cd6438cba` | 86 + 343 用例 |
 
@@ -175,10 +176,16 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 
 | 升级 | commits / 文件 | 目标包有改动吗 | 补丁冲突 |
 |---|---|---|---|
+| rc.2 → 0.2.0-rc.1 | 261 / 1109 | ❌ 只改 `package.json` + 无关文件 | 无 |
 | alpha.2 → rc.1 | 156 / 933 | ❌ 只改 `package.json` | 无 |
 | rc.1 → rc.2 | 346 / 3429 | ✅ workspace-controller 17 文件 | 仅生成文件 |
 
-> rc.1 那次两个目标包**源码一行没动**，重建产物与上一版 **sha256 完全相同**——升级只是把同样的字节拷回去。
+> **有两次升级的目标包源码一行没动，重建产物与上一版 `sha256` 完全相同**——`0.2.0-rc.1` 和 `0.1.7-rc.1`。
+> 也就是升级只是把同样的字节拷回去。`probe.sh` §3 那一步就是为了提前发现这种情况。
+
+> ⚠️ **别看 diff 的总行数判断规模。** `rc.2 → 0.2.0-rc.1` 号称 `−77957` 行删除，
+> 其中 96% 来自**一个生成文件** `docs/persistence-schema.json`（−75173）。
+> 真实代码改动只有 `+17k / −2.8k`。按目录 `--numstat` 拆开看，别被总数吓到。
 
 ---
 
@@ -232,6 +239,22 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 
 7. **`npm i -g` 可能因 `~/.npm` 属主问题报 EPERM**。脚本里统一带 `--cache /tmp/dsh-npm-cache` 绕开。
    代价是每次安装都会重新下载，慢几十秒；如果 `~/.npm` 属主正常可以覆盖 `DSH_NPM_CACHE` 去掉它。
+
+8. **提交必须加 `LEFTHOOK=0`**，否则 pre-commit 的 `third-party notices` 钩子会失败：
+   ```
+   Error: browser notices: cannot resolve clsx from
+     packages/client/ui-schedule/src/client/TaskManagerPage.tsx
+   ```
+   **这不是补丁问题，也不是运行时问题。** 该钩子要扫描浏览器 bundle，而我们的源码树 `node_modules`
+   不完整（跳过了整仓 install）；`clsx` 只是 `ui-schedule` 的 **devDependency**，发布出去的全局 npm
+   安装里根本不装它，所以运行时完全不受影响。**别去追这个错误，加 `LEFTHOOK=0` 跳过即可。**
+   （linter、whitespace、translation pairing 那几个钩子是过得的，失败只出在这一条。）
+
+9. **每次升级都会冒出新的缺失 workspace 链接**，因为是按"目标版本改过的 package.json"新引入的包。
+   `0.2.0-rc.1` 新增了 **9 个**（`dsh-otel`、`dsh-skill`、`dsh-client-product-analytics`、
+   `dsh-host-product-telemetry-otel`、`dsh-client-ui-settings-session-log`、`dsh-deepseek-account`、
+   `dsh-experimental-schedule-bundle` 等）。**建完必须逐个主动验证能否解析**——断链不报错，
+   只在真正加载时表现为 `Cannot find module`，极易误判成上游改坏了（见第 3 条）。
 
 ---
 
