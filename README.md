@@ -157,6 +157,13 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 
 切换后**浏览器要硬刷新**（`Cmd+Shift+R`），否则页面还跑着旧版本的 client 代码。
 
+> ⚠️ **装 DSH 永远要带明确版本号。** 上游的 RC 走 `next` 通道，`latest` 可能**落后**。
+> `0.2.0-rc.1` 发布时 `latest` 还是 `0.1.7-rc.2`——此时执行
+> `npm i -g @deepseek-ai/dsh`（或 `@latest`）会**把已升好的版本静默降级回去**，
+> 而补丁产物还留着，结果是一个版本错配的混合体，非常难查。
+> `switch.sh` 内部用的是 `@deepseek-ai/dsh@$VERSION`，是安全的；**手敲命令时别偷懒**。
+> 升级前先 `npm view @deepseek-ai/dsh dist-tags` 看清三个通道各指向哪里。
+
 出问题就 `bash scripts/rollback.sh 0.1.7-rc.2`。
 
 ### 4.7 检查 profile 的 bundles 是否还够用（**别跳过**）
