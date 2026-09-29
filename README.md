@@ -159,6 +159,46 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 
 出问题就 `bash scripts/rollback.sh 0.1.7-rc.2`。
 
+### 4.7 检查 profile 的 bundles 是否还够用（**别跳过**）
+
+上游会在版本之间把功能在 bundle 之间**搬家**，而且不打招呼。搬家后 profile 若仍只列老 bundle，
+**功能会静默消失**——不报错、不崩溃，就是界面里少了一块。脚本检测不出来这一条，只能人工比。
+
+**做法**：对比两个版本的 `dsh-web-app` / `dsh-base` 依赖差异，看有没有包被移出：
+
+```bash
+cd ~/work/guardian/git/deepseek-harness
+git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bundle/base/package.json
+```
+
+**真实案例**：`0.2.0-rc.1` 把自动化任务整体挪走了，`dsh-web-app` 里**移除了**三个包
+
+```
+- @deepseek-ai/dsh-client-ui-schedule
+- @deepseek-ai/dsh-schedule
+- @deepseek-ai/dsh-time-context
+```
+
+它们被打包成新的可选 bundle `@deepseek-ai/dsh-experimental-schedule-bundle`（已发布到 npm）。
+**不把新 bundle 加进 profile，自动化任务就会从界面消失。** 改 `~/.dsh/profiles/web/package.json`：
+
+```json
+"dsh": { "profile": { "bundles": [
+  "@deepseek-ai/dsh-base",
+  "@deepseek-ai/dsh-web-app",
+  "@deepseek-ai/dsh-experimental-agent-team-profile",
+  "@deepseek-ai/dsh-experimental-schedule-bundle",
+  "dsh-plugin-tetris"
+] } }
+```
+
+**顺序很重要**：先跑 `switch.sh`（它会备份旧的 profile），**再**改 bundles。
+反过来的话，回滚会 restore 出一份"旧版本 + 新 bundle"的 profile，导致功能重复注册。
+
+改完用 `dsh --profile web --dump-config`（**必须带 `--profile`**）复核：
+退出码 0、行数合理、被搬走的功能关键字确实出现在输出里。行数是有用的信号——
+本次 rc.2 = 1393 行 → 裸装 0.2.0-rc.1 = 1406 行 → 补 bundle 后 = 1413 行。
+
 ---
 
 ## 5. 版本矩阵
@@ -277,6 +317,25 @@ grep -c REBUILD_BASE_MS /tmp/served.js          # 期望 2
 顺便可以确认模块表里 Agent Teams / tetris 还在、宿主**只有一个实例**。
 
 **注意**：`~/.dsh/dsh-web.log` 里有登录 token，记得 `chmod 600`。
+
+### 读 boot payload 的两个坑（都真实踩过）
+
+1. **boot payload 里有 74 个 combo，不是 1 个。** 除了那个 57 模块的 `bootstrap` 大批次，
+   每个模块还有自己的**单模块 combo**（HMR fallback / batch 失败时的回退地址）。
+   **只读第一个（最大的）combo 会得到一份残缺的模块表**——我曾据此误判
+   "`dsh-api-workspace-controller` 没被加载，修复①可能失效"，其实它在自己的单模块 combo 里。
+   正确做法：把所有 `plugins/??` 都抓出来取并集（本次合并后 **68 个**唯一模块）。
+
+2. **`grep -c` 数的是匹配行数，不是匹配次数。** HTML 是压缩的，`grep -c plugins` 会返回 `1`。
+   要数次数用 `grep -o ... | wc -l`，或者在 Python/脚本里用 `str.count()`。
+
+3. **单模块 combo 不能自己拼 URL。** `/plugins/??<pkg>/client.js` 一律 404，
+   连确定存在的模块也 404——**每个 combo 的 `rev` 是各自算的**，
+   必须原样用 boot payload 里那一条的完整 URL（含它自己的 `&rev=`）。
+
+> 这三条合起来是个通用教训：**验证脚本自己出错时，比不验证更危险**——它会给出
+> 一份看起来有依据的错误结论。规则是：**任何"X 不在列表里"的结论，先确认自己的
+> 列表是完整的**，再下判断。本次因此走了三段弯路。
 
 ---
 
