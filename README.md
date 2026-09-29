@@ -169,14 +169,31 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 ### 4.7 检查 profile 的 bundles 是否还够用（**别跳过**）
 
 上游会在版本之间把功能在 bundle 之间**搬家**，而且不打招呼。搬家后 profile 若仍只列老 bundle，
-**功能会静默消失**——不报错、不崩溃，就是界面里少了一块。脚本检测不出来这一条，只能人工比。
+**功能会静默消失**——不报错、不崩溃，就是界面里少了一块。
 
-**做法**：对比两个版本的 `dsh-web-app` / `dsh-base` 依赖差异，看有没有包被移出：
+**`probe.sh` 的第 4 步已经自动检测这一条**，所以正常流程是**读它的输出**，不用手工 diff：
+
+```bash
+bash scripts/probe.sh <新版本>
+# === 4. bundle 依赖有没有「搬家」 ===
+#   ✅ 没有依赖被移出任何 bundle——profile 的 bundles 不用动
+# 或
+#   ⚠️  @deepseek-ai/dsh-client-ui-schedule
+#         从 @deepseek-ai/dsh-web-app 移出
+#         现在在 @deepseek-ai/dsh-experimental-schedule-bundle   (…/schedule-bundle/package.json)
+#   ⇒ 把上面「现在在」列的 bundle 加进 profile 的 dsh.profile.bundles
+```
+
+手工复核（脚本报⚠️ 或你想自己确认时）：
 
 ```bash
 cd ~/work/guardian/git/deepseek-harness
 git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bundle/base/package.json
 ```
+
+> 检测逻辑有个容易踩的坑：**不能只看 `-` 侧的行**。追加一个依赖会让上一行多一个逗号，
+> 于是同一个包在 `-`/`+` 两侧都出现——只看 `-` 会把 `@deepseek-ai/dsh-settings` 这类
+> **没搬家**的包报成"移出"。`probe.sh` 用 `comm -23` 减掉了 `+` 侧的名字。
 
 **真实案例**：`0.2.0-rc.1` 把自动化任务整体挪走了，`dsh-web-app` 里**移除了**三个包
 
@@ -302,6 +319,24 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
    `dsh-host-product-telemetry-otel`、`dsh-client-ui-settings-session-log`、`dsh-deepseek-account`、
    `dsh-experimental-schedule-bundle` 等）。**建完必须逐个主动验证能否解析**——断链不报错，
    只在真正加载时表现为 `Cannot find module`，极易误判成上游改坏了（见第 3 条）。
+
+10. **`git ls-tree` 的 pathspec 里 `*` 不跨 `/`，而且失败是静默的。**
+    `git ls-tree -r --name-only <tag> -- 'packages/bundle/*/package.json'` 返回**空**，不报错。
+    而 `git grep` 用另一套匹配规则，**同样的 pathspec 能正常匹配**——别把 grep 的经验套过来。
+    可靠写法是给目录前缀再加 `grep` 过滤：
+    ```bash
+    git ls-tree -r --name-only <tag> -- packages/bundle packages/experimental \
+      | grep -E '(^packages/bundle/[^/]+/package\.json$)'
+    ```
+
+11. **`git grep -l <模式> <tree-ish> -- <路径>` 的输出路径带 `<tree-ish>:` 前缀。**
+    例如 `dsh-v0.2.0-rc.1:apps/cli/package.json`。若直接拼成 `git show "$TAG:$h"` 就变成
+    `tag:tag:path` → `fatal: invalid object name`，**exit 128**；在 `set -e` 的脚本里
+    会把整个脚本杀掉，且**只打印出前半截结果**，看起来像"检查正常做完了一部分"。
+    必须 `sed "s|^${TAG}:||"` 剥掉前缀。
+
+> 第 10、11 条是同一个毛病：**命令的「没找到」和「没成功」长得一样**。
+> 凡是要断言"X 不存在"，先确认自己的枚举是完整的、且失败会响。
 
 ---
 
