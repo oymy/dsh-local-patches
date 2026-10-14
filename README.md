@@ -4,8 +4,11 @@
 
 本仓库**只装补丁和脚本，不装 DSH 源码**。升级时从上游拉取，打完补丁再构建。
 
-> **`patches/` 当前面向 `0.2.0-rc.1`**（`next` 通道；`latest` 当时仍停在 `0.1.7-rc.2`）。
-> 历史版本补丁在 `patches/archive/<version>/`。补丁只对各自目标版本有效，跨版本用前先 `probe.sh`。
+> **`patches/` 当前面向 `0.2.0-rc.1`**。历史版本补丁在 `patches/archive/<version>/`。
+> 补丁只对各自的目标版本有效，跨版本用前先 `probe.sh`。
+>
+> 通道快照（**2026-10-14**，会过时，用时现查）：`latest` = `next` = `0.2.0-rc.2`，`alpha` = `0.2.1-alpha.2`。
+> 查命令：`npm view @deepseek-ai/dsh dist-tags`。
 
 ---
 
@@ -77,7 +80,7 @@ topics            : ai-agents, cordis, dsh, dsh-plugin
 | **月级巡检一次** | 升到当时最新的稳定 tag 即可 |
 | 紧急（安全或阻断性问题） | 立刻升 |
 
-`probe.sh` 会明确告诉你"两个目标包是否被上游改到"——**上一轮 alpha.2→rc.1 两个包源码一行没动**，
+`probe.sh` 会明确告诉你"两个目标包是否被上游改到"——**上一轮 `0.1.7-alpha.2 → 0.1.7-rc.1` 两个包源码一行没动**，
 重建产物与上一版 **sha256 完全相同**，那次升级纯粹是把同样的字节拷回去。
 所以先跑 probe，再决定要不要花那 25 分钟。
 
@@ -163,6 +166,10 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 > 而补丁产物还留着，结果是一个版本错配的混合体，非常难查。
 > `switch.sh` 内部用的是 `@deepseek-ai/dsh@$VERSION`，是安全的；**手敲命令时别偷懒**。
 > 升级前先 `npm view @deepseek-ai/dsh dist-tags` 看清三个通道各指向哪里。
+>
+> 注意上面那条**不是永久规律**：2026-09-29 起 `latest` 追上了 `0.2.0-rc.2`，
+> 此期间 `@latest` 反而能装到**更新**的版本。
+> 规则的本体是「**别信通道名，先查 `dist-tags`**」，而不是「`latest` 总是旧的」。
 
 出问题就 `bash scripts/rollback.sh 0.1.7-rc.2`。
 
@@ -221,7 +228,7 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 改完用 `dsh --profile web --dump-config`（**必须带 `--profile`**）复核：
 退出码 0、行数合理、被搬走的功能关键字确实出现在输出里。行数是有用的信号——
-本次 rc.2 = 1393 行 → 裸装 0.2.0-rc.1 = 1406 行 → 补 bundle 后 = 1413 行。
+本次 `0.1.7-rc.2` = 1393 行 → 裸装 0.2.0-rc.1 = 1406 行 → 补 bundle 后 = 1413 行。
 
 ---
 
@@ -229,7 +236,7 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | DSH 版本 | 补丁集 | 移植分支 | 测试 |
 |---|---|---|---|
-| `0.2.0-rc.1`（当前，`next`） | `patches/` | `port/0.2.0-rc.1` @ `7c3e08e3e0` | 20 文件 / 417 用例 |
+| `0.2.0-rc.1`（当前运行） | `patches/` | `port/0.2.0-rc.1` @ `7c3e08e3e0` | 20 文件 / 417 用例 |
 | `0.1.7-rc.2` | `patches/archive/0.1.7-rc.2` | `port/0.1.7-rc.2` @ `973dbf43ed` | 20 文件 / 417 用例 |
 | `0.1.7-rc.1` | `patches/archive/0.1.7-rc.1` | `port/0.1.7-rc.1` @ `071343ae62` | 20 文件 / 429 用例 |
 | `0.1.7-alpha.2` | `patches/archive/0.1.7-alpha.2` | `port/0.1.7` @ `58cd6438cba` | 86 + 343 用例 |
@@ -240,14 +247,20 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | 升级 | commits / 文件 | 目标包有改动吗 | 补丁冲突 |
 |---|---|---|---|
-| rc.2 → 0.2.0-rc.1 | 261 / 1109 | ❌ 只改 `package.json` + 无关文件 | 无 |
-| alpha.2 → rc.1 | 156 / 933 | ❌ 只改 `package.json` | 无 |
-| rc.1 → rc.2 | 346 / 3429 | ✅ workspace-controller 17 文件 | 仅生成文件 |
+| `0.2.0-rc.1` → `0.2.0-rc.2` | 187 / 1022 | ❌ 只改 `package.json` + 无关文件 | 无（**未升，已探**） |
+| `0.1.7-rc.2` → `0.2.0-rc.1` | 261 / 1109 | ❌ 只改 `package.json` + 无关文件 | 无 |
+| `0.1.7-alpha.2` → `0.1.7-rc.1` | 156 / 933 | ❌ 只改 `package.json` | 无 |
+| `0.1.7-rc.1` → `0.1.7-rc.2` | 346 / 3429 | ✅ workspace-controller 17 文件 | 仅生成文件 |
+
+> 版本号一律写全（`0.2.0-rc.1`），不要缩写成 `rc.1`——两套 RC 编号并存时缩写会歧义。
+>
+> `0.2.0-rc.1 → 0.2.0-rc.2` 那行是**探针结论**（`probe.sh 0.2.0-rc.2`），不是已完成升级：
+> 补丁三个都能直接应用、bundle 无搬家。真要升时仍需跑一遍完整流程（测试 + 构建 + 端到端）。
 
 > **有两次升级的目标包源码一行没动，重建产物与上一版 `sha256` 完全相同**——`0.2.0-rc.1` 和 `0.1.7-rc.1`。
 > 也就是升级只是把同样的字节拷回去。`probe.sh` §3 那一步就是为了提前发现这种情况。
 
-> ⚠️ **别看 diff 的总行数判断规模。** `rc.2 → 0.2.0-rc.1` 号称 `−77957` 行删除，
+> ⚠️ **别看 diff 的总行数判断规模。** `0.1.7-rc.2 → 0.2.0-rc.1` 号称 `−77957` 行删除，
 > 其中 96% 来自**一个生成文件** `docs/persistence-schema.json`（−75173）。
 > 真实代码改动只有 `+17k / −2.8k`。按目录 `--numstat` 拆开看，别被总数吓到。
 
