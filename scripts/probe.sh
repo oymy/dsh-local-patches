@@ -5,8 +5,9 @@
 # 以及一个用完即删的临时 worktree。
 #
 # 用法：
-#   bash scripts/probe.sh 0.1.7-rc.3
-#   DSH_CLONE=/path/to/deepseek-harness bash scripts/probe.sh 0.1.7-rc.3
+#   bash scripts/probe.sh 0.2.1-rc.2            # 基线自动取「本地正在跑的版本」
+#   bash scripts/probe.sh 0.2.1-rc.2 0.2.0-rc.1 # 显式指定基线
+#   DSH_CLONE=/path/to/deepseek-harness bash scripts/probe.sh 0.2.1-rc.2
 #
 # 输出结论：三个补丁各自「可直接应用 / 冲突」、两个目标包是否被上游改到、
 #           以及 bundle 依赖有没有搬家（功能静默消失的预警）。
@@ -14,7 +15,7 @@ set -euo pipefail
 
 VERSION="${1:-}"
 if [ -z "$VERSION" ]; then
-  echo "用法: probe.sh <version>   例如: probe.sh 0.1.7-rc.3" >&2
+  echo "用法: probe.sh <version>   例如: probe.sh 0.2.1-rc.2" >&2
   exit 2
 fi
 
@@ -52,14 +53,27 @@ fi
 git rev-parse --verify --quiet "$TAG^{commit}" >/dev/null || { echo "  ❌ 标签无法解析" >&2; exit 1; }
 echo "  ✅ $TAG = $(git rev-parse --short "$TAG")   $(git log -1 --format=%ci "$TAG")"
 
-# --- 找上一个发布标签作为对比基线 ---
-PREV_TAG="$(git describe --tags --abbrev=0 --match 'dsh-v*' "${TAG}^" 2>/dev/null || true)"
-if [ -z "$PREV_TAG" ]; then
-  PREV_TAG="$(git describe --tags --abbrev=0 --match 'dsh-v*' HEAD 2>/dev/null || true)"
+# --- 对比基线：优先用「本地正在跑的版本」，而不是紧邻的上一个 tag ---
+# 为什么：跨多版本升级时（如 0.2.0-rc.1 → 0.2.1-rc.2），紧邻 tag 只反映最后一个 hop
+# （0.2.1-rc.1 → 0.2.1-rc.2，9 个提交），会把 §3「目标包是否被改到」严重低估，
+# 让人误以为源码没动、可以机械应用，实际补丁会在 src/ 里冲突。
+LOCAL_VERSION="$(command -v dsh >/dev/null 2>&1 && dsh --version 2>/dev/null | tail -1 | tr -d '[:space:]' || true)"
+BASE_ARG="${2:-}"
+BASE_VERSION="${BASE_ARG:-$LOCAL_VERSION}"
+PREV_TAG=""
+if [ -n "$BASE_VERSION" ] && git rev-parse --verify --quiet "dsh-v$BASE_VERSION^{commit}" >/dev/null 2>&1; then
+  PREV_TAG="dsh-v$BASE_VERSION"
+  echo "  对比基线 : ${PREV_TAG}（$( [ "$BASE_VERSION" = "$LOCAL_VERSION" ] && echo '本地正在跑的版本' || echo '手工指定' )）"
 fi
-if [ -z "$PREV_TAG" ]; then echo "  ⚠️ 找不到对比基线标签，改用手工指定"; exit 1; fi
+if [ -z "$PREV_TAG" ]; then
+  PREV_TAG="$(git describe --tags --abbrev=0 --match 'dsh-v*' "${TAG}^" 2>/dev/null || true)"
+  [ -z "$PREV_TAG" ] && PREV_TAG="$(git describe --tags --abbrev=0 --match 'dsh-v*' HEAD 2>/dev/null || true)"
+  [ -z "$PREV_TAG" ] && { echo "  ❌ 找不到对比基线标签，可用第二个参数显式指定" >&2; exit 1; }
+  echo "  对比基线 : ${PREV_TAG}（回退到紧邻 tag——⚠️ 可能是多跳升级，§3 会低估）"
+fi
 
-say "2. 与上一个发布标签对比（基线 ${PREV_TAG}）"
+say "2. 与基线对比（基线 ${PREV_TAG}）"
+echo "  （这是从我们当前版本到目标的完整跨度，不是最后一个小版本）"
 if git merge-base --is-ancestor "$PREV_TAG" "$TAG"; then
   echo "  ✅ fast-forward（上游没有 force-rewrite 到不兼容的历史）"
 else
@@ -156,6 +170,7 @@ if [ "$CONFLICT" = "0" ]; then
 else
   echo "  ⚠️ $CONFLICT 个补丁冲突（$READY 个干净）。"
   echo "     若冲突只在 README.i18n.yaml / docs/config-catalog.*，那是生成文件，"
-  echo "     用 --exclude 排除后按 README §4.4 重新生成，属于机械冲突。"
-  echo "     若冲突落在 src/ 下的代码，才需要真正的手工适配。"
+  echo "     重新生成即可（README §4.4），属于机械冲突。"
+  echo "     若冲突落在 src/ 下的代码，才需要真正的手工适配："
+  echo "     用 git apply --3way 应用，按 README §4.2 的三条规则解冲突。"
 fi

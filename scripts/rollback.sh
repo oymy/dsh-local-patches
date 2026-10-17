@@ -5,12 +5,12 @@
 # 请改用 switch.sh 重新构建并切换（它会现场生成备份）。
 #
 # 用法：
-#   bash scripts/rollback.sh 0.1.7-rc.2
+#   bash scripts/rollback.sh 0.2.0-rc.1
 set -euo pipefail
 
 VERSION="${1:-}"
 if [ -z "$VERSION" ]; then
-  echo "用法: rollback.sh <要回滚到的版本>   例如: rollback.sh 0.1.7-rc.2" >&2
+  echo "用法: rollback.sh <要回滚到的版本>   例如: rollback.sh 0.2.0-rc.1" >&2
   exit 2
 fi
 

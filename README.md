@@ -4,10 +4,11 @@
 
 本仓库**只装补丁和脚本，不装 DSH 源码**。升级时从上游拉取，打完补丁再构建。
 
-> **`patches/` 当前面向 `0.2.0-rc.1`**。历史版本补丁在 `patches/archive/<version>/`。
+> **`patches/` 当前面向 `0.2.1-rc.2`**。历史版本补丁在 `patches/archive/<version>/`。
 > 补丁只对各自的目标版本有效，跨版本用前先 `probe.sh`。
 >
-> 通道快照（**2026-10-14**，会过时，用时现查）：`latest` = `next` = `0.2.0-rc.2`，`alpha` = `0.2.1-alpha.2`。
+> 通道快照（**2026-10-17**，会过时，用时现查）：`latest` = `0.2.0-rc.2`，
+> `next` = `0.2.1-rc.2`，`alpha` = `0.2.1-alpha.5`。
 > 查命令：`npm view @deepseek-ai/dsh dist-tags`。
 
 ---
@@ -90,7 +91,7 @@ topics            : ai-agents, cordis, dsh, dsh-plugin
 ### 4.1 先判断这次升级是轻松还是艰难
 
 ```bash
-bash scripts/probe.sh 0.1.7-rc.3
+bash scripts/probe.sh 0.2.1-rc.2
 ```
 
 **全程只读**，不动工作区、不装包、不重启。输出：
@@ -102,19 +103,58 @@ bash scripts/probe.sh 0.1.7-rc.3
 
 这一步通常 1 分钟内给出结论：**"直接应用"** 还是 **"需要适配 N 处"**。
 
+> ⚠️ **跨多版本升级时，probe 的"目标包是否被改到"会偏低。**
+> 它算的是**紧邻的上一个 tag** → 目标 tag，而补丁的基线是**我们当前跑的版本**。
+> 例：`0.2.0-rc.1 → 0.2.1-rc.2` 时 probe 只比 `0.2.1-rc.1 → 0.2.1-rc.2`（9 个提交），
+> 于是显示"只改了 `package.json`"，但 `src/adapter.ts` / `src/context.ts` 实际被改了几十行，
+> 补丁在代码区冲突。**结论以 §5 的 `git apply --check` 为准，别只看 §3。**
+
 ### 4.2 移植
 
 ```bash
 cd <deepseek-harness clone>
-git fetch origin tag dsh-v0.1.7-rc.3          # 只拉需要的 tag，别用 --tags
-git checkout -b port/0.1.7-rc.3 dsh-v0.1.7-rc.3
+git fetch origin tag dsh-v0.2.1-rc.2          # 只拉需要的 tag，别用 --tags
+git checkout -b port/0.2.1-rc.2 dsh-v0.2.1-rc.2
 
-git apply <repo>/patches/0001-workspace-stream-rebuild.patch
-git apply --exclude='*README.i18n.yaml'        <repo>/patches/0002-responses-reasoning-replay.patch
-git apply --exclude='docs/config-catalog*'     <repo>/patches/0003-docs-and-notes.patch
+git apply       <repo>/patches/0001-workspace-stream-rebuild.patch
+git apply --3way <repo>/patches/0002-responses-reasoning-replay.patch
+git apply       <repo>/patches/0003-docs-and-notes.patch
 ```
 
-被 `--exclude` 掉的是**生成文件**，不要手工改，重新生成即可（见 4.4）。
+`--3way` 能自动合并的会直接合并，只在**真冲突**处留 `<<<<<<<`。
+`0002` 是最容易冲突的一个——它插在 `toPiContext` 附近，而上游近期正好在改那段。三条解冲突规则：
+
+| 冲突形态 | 怎么解 |
+|---|---|
+| 两边各加了一行 `import` | **两个都留**，合成一行 |
+| 上游改了变量名（如 `options` → `request`）我们在附近插入 | **保留上游新名**，把我们的行跟上（`repeatReasoningBeforeEachToolCall(baseContext)`） |
+| 生成文件（`README.i18n.yaml`）的哈希行 | 随便取一边，§4.4 重新生成会覆盖 |
+
+解完先自检有没有漏：
+
+```bash
+grep -rln '^<<<<<<<' packages/ docs/ .agents/     # 必须为空
+```
+
+### 4.2.5 同步依赖（**上游换了依赖版本就必须做**）
+
+```bash
+cd <deepseek-harness clone>
+corepack pnpm install --frozen-lockfile --child-concurrency=2 --network-concurrency=8
+```
+
+三条硬规矩，错一条就白折腾：
+
+1. **必须用 `corepack pnpm`，不能用全局 `pnpm`。** 仓库 `package.json` 钉的是 `pnpm@11.28.5`；
+   全局的 9.9 会报 `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`（两者对 `overrides` 的解析不一致）。
+2. **必须带 `--frozen-lockfile`。** 不带就会重算整个依赖图，那才是真正吃内存的动作；
+   带上之后基本只是按 lockfile 建链接（366 个 workspace 项目约 1 分钟）。
+3. **它可能先删 `node_modules` 再装。** 状态不一致时 pnpm 会 purge，
+   中途失败就留下一个空目录——跑之前确认有网、有 ~15 GB 磁盘余量。
+
+判断要不要跑：看目标包的 `package.json` 依赖范围变没变。
+`0.2.1-rc.2` 把 `@earendil-works/pi-ai` 从 `^0.85.1` 提到 **`^1.1.0`**（跨大版本），
+不装就会在测试里看到 `TypeError: getAllBuiltinModels is not a function`。
 
 ### 4.3 测试 + 构建
 
@@ -129,7 +169,47 @@ node_modules/.bin/vitest run packages/api/workspace-controller/tests/ packages/l
 | `packages/api/workspace-controller/lib/client.js` | `REBUILD_BASE_MS`、`workspace-controller.client.generation`、`replacePinned` |
 | `packages/llm/llm-pi-ai/lib/index.js` | `repeatReasoningBeforeEachToolCall` |
 
-### 4.4 重新生成文档（`--exclude` 掉的部分）
+**workspace-controller**（host 面 + client 面各一轮，顺序不能换）：
+
+```bash
+cd packages/api/workspace-controller
+B=../../../node_modules/.bin
+$B/tsc -b tsconfig.host.json --force
+$B/tsdown --env.DSH_BUILD_FACE host
+$B/tsc -b tsconfig.client.json --force      # 3 个 TS2339 属已知噪音，见 §6
+$B/tsdown --env.DSH_BUILD_FACE client       # 产出 lib/client.js
+```
+
+**llm-pi-ai**（根目录的 tsdown 用不了，要临时配置把 `lib/types/` 打成单文件）：
+
+```bash
+cd packages/llm/llm-pi-ai
+B=../../../node_modules/.bin
+$B/tsc -b tsconfig.json --force             # 产出 lib/types/*.js
+cat > tsdown.tmp-build.config.ts <<'EOF'
+import { defineConfig } from 'tsdown'
+
+export default defineConfig({
+  entry: ['lib/types/index.js'],
+  outDir: 'lib',
+  format: ['esm'],
+  platform: 'node',
+  target: 'es2024',
+  fixedExtension: false,
+  dts: false,
+  clean: false,
+})
+EOF
+$B/tsdown --config tsdown.tmp-build.config.ts
+rm tsdown.tmp-build.config.ts
+```
+
+> 为什么要临时配置：仓库根的单文件打包会去解析 typert 的 `brand-font.css` 而失败。
+> `entry` 指到 `lib/types/index.js`（`tsc` 的产物）正好绕开。
+> 另外别忘了**验收上游新版符号也在**，防止把上游代码打丢——
+> 例如 `0.2.1-rc.2` 应同时看到 `getAllBuiltinModels`、`conversationUpdates`、`requestImageTarget`。
+
+### 4.4 重新生成文档（冲突的生成文件）
 
 ```bash
 node_modules/.bin/tsx scripts/gen-config-catalog.ts                                  # 会同时写 .md 和 .zh.md
@@ -138,23 +218,40 @@ node_modules/.bin/tsx scripts/verify-translation-pairing.ts --write packages/llm
 node_modules/.bin/tsx scripts/gen-config-catalog.ts --check                          # 必须 up to date
 ```
 
+生成文件**不要手工改**——`README.i18n.yaml` 里的哈希是正文的摘要，手改必错，
+跑一次 `--write` 让它自己算。
+
 ### 4.5 提交 + 出补丁
 
 ```bash
-LEFTHOOK=0 git commit -m "fix(local): port both fixes onto 0.1.7-rc.3"
-git diff dsh-v0.1.7-rc.3 HEAD -- packages/api/workspace-controller > patches/0001-....patch
-git diff dsh-v0.1.7-rc.3 HEAD -- packages/llm/llm-pi-ai             > patches/0002-....patch
-git diff dsh-v0.1.7-rc.3 HEAD -- docs/config-catalog.md docs/config-catalog.zh.md \
+LEFTHOOK=0 git commit -m "fix(local): port both fixes onto 0.2.1-rc.2"
+git diff dsh-v0.2.1-rc.2 HEAD -- packages/api/workspace-controller > patches/0001-....patch
+git diff dsh-v0.2.1-rc.2 HEAD -- packages/llm/llm-pi-ai             > patches/0002-....patch
+git diff dsh-v0.2.1-rc.2 HEAD -- docs/config-catalog.md docs/config-catalog.zh.md \
   '.agents/notes/implemented/bug-fix/*'                             > patches/0003-....patch
 ```
 
-**必做自检**：分支改动文件数 == 三个补丁里 `^diff --git` 的行数。
+**必做自检 1**：分支改动文件数 == 三个补丁里 `^diff --git` 的行数。
 这 1 秒的检查防的是"路径 glob 漏文件导致补丁集静默少东西"这个真实风险。
+
+**必做自检 2**：把三个补丁打到干净 tag 上，看能否重建出**完全相同**的 tree。
+这是唯一能证明"补丁集 = 这次移植的全部改动"的检查：
+
+```bash
+git worktree add --detach /tmp/verify dsh-v0.2.1-rc.2
+cd /tmp/verify
+for p in <repo>/patches/000*.patch; do git apply "$p"; done
+git add -A
+git write-tree                                  # 记为 T1
+git -C <clone> rev-parse 'HEAD^{tree}'           # 记为 T2，必须 T1 == T2
+```
+
+顺带把旧补丁集归档：`mkdir -p patches/archive/<旧版本> && mv patches/000*.patch patches/archive/<旧版本>/`。
 
 ### 4.6 切换 + 重启
 
 ```bash
-bash scripts/switch.sh 0.1.7-rc.3     # 备份 → 装全局 → 覆盖产物 → 验收符号 → --dump-config 预检
+bash scripts/switch.sh 0.2.1-rc.2     # 备份 → 装全局 → 覆盖产物 → 验收符号 → --dump-config 预检
 bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消息先发出去）
 ```
 
@@ -171,7 +268,7 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 > 此期间 `@latest` 反而能装到**更新**的版本。
 > 规则的本体是「**别信通道名，先查 `dist-tags`**」，而不是「`latest` 总是旧的」。
 
-出问题就 `bash scripts/rollback.sh 0.1.7-rc.2`。
+出问题就 `bash scripts/rollback.sh 0.2.0-rc.1`。
 
 ### 4.7 检查 profile 的 bundles 是否还够用（**别跳过**）
 
@@ -228,7 +325,22 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 改完用 `dsh --profile web --dump-config`（**必须带 `--profile`**）复核：
 退出码 0、行数合理、被搬走的功能关键字确实出现在输出里。行数是有用的信号——
-本次 `0.1.7-rc.2` = 1393 行 → 裸装 0.2.0-rc.1 = 1406 行 → 补 bundle 后 = 1413 行。
+`0.1.7-rc.2` = 1393 行 → 裸装 0.2.0-rc.1 = 1406 行 → 补 bundle 后 = 1413 行；
+`0.2.0-rc.1` = 1423 行 → `0.2.1-rc.2` = 1385 行（**行数变少不一定有问题，见下**）。
+
+**判断搬家到底有没有损失，看插件是否 `disabled: true`。** 下面是 `0.2.1-rc.2` 的实测：
+
+```
+去掉 4 个：skill-badge、tool-ralph、tool-subagent-claude-code、tool-subagent-codex
+          —— 这 4 个在旧版里本来就是 disabled: true，从不生效，掉了等于没掉
+新增 9 个：tool-schedule、tool-working-directory、working-directory、remote-access、
+          tool-plugin-market、ui-secret-mask、web-deepseek-api、
+          ui-deepseek-model-label-1017、harness-dev-context
+```
+
+所以那次 1423 → 1385 的下降是**纯配置项减少，没有功能变化**。
+别看到行数下降就慌，也别看到 probe 报"搬家"就急着加 bundle——先查这几个插件是否真的启用着。
+反过来，`0.2.0-rc.1` 那次是真的丢了功能（自动化任务整体迁走），才需要补 bundle。
 
 ---
 
@@ -236,7 +348,8 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | DSH 版本 | 补丁集 | 移植分支 | 测试 |
 |---|---|---|---|
-| `0.2.0-rc.1`（当前运行） | `patches/` | `port/0.2.0-rc.1` @ `7c3e08e3e0` | 20 文件 / 417 用例 |
+| `0.2.1-rc.2`（当前运行，`next` 通道） | `patches/` | `port/0.2.1-rc.2` @ `e99f25be71` | 24 文件 / 495 用例 |
+| `0.2.0-rc.1` | `patches/archive/0.2.0-rc.1` | `port/0.2.0-rc.1` @ `7c3e08e3e0` | 20 文件 / 417 用例 |
 | `0.1.7-rc.2` | `patches/archive/0.1.7-rc.2` | `port/0.1.7-rc.2` @ `973dbf43ed` | 20 文件 / 417 用例 |
 | `0.1.7-rc.1` | `patches/archive/0.1.7-rc.1` | `port/0.1.7-rc.1` @ `071343ae62` | 20 文件 / 429 用例 |
 | `0.1.7-alpha.2` | `patches/archive/0.1.7-alpha.2` | `port/0.1.7` @ `58cd6438cba` | 86 + 343 用例 |
@@ -247,15 +360,19 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | 升级 | commits / 文件 | 目标包有改动吗 | 补丁冲突 |
 |---|---|---|---|
-| `0.2.0-rc.1` → `0.2.0-rc.2` | 187 / 1022 | ❌ 只改 `package.json` + 无关文件 | 无（**未升，已探**） |
+| `0.2.0-rc.1` → `0.2.1-rc.2` | 2112 / 300+ | ✅ `adapter.ts`、`context.ts`、`catalog.ts` 均改 | ✅ 代码区 2 处，手工解 |
+| `0.2.0-rc.1` → `0.2.0-rc.2` | 187 / 1022 | ❌ 只改 `package.json` + 无关文件 | 无（**已探，跳过未升**） |
 | `0.1.7-rc.2` → `0.2.0-rc.1` | 261 / 1109 | ❌ 只改 `package.json` + 无关文件 | 无 |
 | `0.1.7-alpha.2` → `0.1.7-rc.1` | 156 / 933 | ❌ 只改 `package.json` | 无 |
 | `0.1.7-rc.1` → `0.1.7-rc.2` | 346 / 3429 | ✅ workspace-controller 17 文件 | 仅生成文件 |
 
 > 版本号一律写全（`0.2.0-rc.1`），不要缩写成 `rc.1`——两套 RC 编号并存时缩写会歧义。
 >
-> `0.2.0-rc.1 → 0.2.0-rc.2` 那行是**探针结论**（`probe.sh 0.2.0-rc.2`），不是已完成升级：
-> 补丁三个都能直接应用、bundle 无搬家。真要升时仍需跑一遍完整流程（测试 + 构建 + 端到端）。
+> 文件数超过 300 的按 `300+` 记：GitHub compare API 单次最多返回 300 个文件，
+> 再往上查不到（`total_commits` 仍是准的）。
+>
+> `0.2.0-rc.1 → 0.2.0-rc.2` 那行是**探针结论**，当时判断"不值当为零改动单独升一次"，
+> 后来 `0.2.1-rc.2` 出来就直接跨过去了。
 
 > **有两次升级的目标包源码一行没动，重建产物与上一版 `sha256` 完全相同**——`0.2.0-rc.1` 和 `0.1.7-rc.1`。
 > 也就是升级只是把同样的字节拷回去。`probe.sh` §3 那一步就是为了提前发现这种情况。
@@ -277,8 +394,13 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
    ```
    注意 `verify-translation-pairing` 内部也会 shell 调 git，必须带上这个 PATH。
 
-2. **`pnpm install` 在内存紧张时必 OOM**（`node::worker::Worker::Run` → SIGABRT 134），`--offline` 也走不通。
-   务实的替代是**跳过整仓 install，只补缺失的 workspace 链接**。
+2. **`pnpm install` 只在内存真正紧张时才 OOM——而且加了 `--frozen-lockfile` 通常根本不会。**
+   实测这台"超订"的 16 GB 机器上，`corepack pnpm install --frozen-lockfile` 把 366 个
+   workspace 项目**58 秒装完、无 OOM**（它只按 lockfile 建链接，不重算依赖图）。
+   会 OOM 的是**不带** `--frozen-lockfile` 的完整解析（`node::worker::Worker::Run` → SIGABRT 134）。
+   所以先试 frozen 这条路（用法见 §4.2.5），不行再退回"跳过整仓 install、只补 workspace 链接"。
+   前提两条：**必须用 `corepack pnpm`**（仓库钉 `pnpm@11.28.5`，全局 9.9 会在 `overrides`
+   校验上报 `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`，而且失败前已经把 `node_modules` 删了）。
    **但先确认机器是否真的超订**——别用错指标（见下一条），确认了就先解决内存，不要给一个可消除的问题建工具。
 
    **macOS 上判断内存压力，不要看 `free`，也不要用 `ps` 的 RSS：**
@@ -350,6 +472,12 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 > 第 10、11 条是同一个毛病：**命令的「没找到」和「没成功」长得一样**。
 > 凡是要断言"X 不存在"，先确认自己的枚举是完整的、且失败会响。
+
+12. **`$VAR（` 会被当成变量名的一部分**——中文标点紧跟在变量后面时最容易中招。
+    `echo "基线 : $PREV_TAG（本地版本）"` 里的全角括号会被吃进变量名，`set -u` 下直接
+    `unbound variable` 炸掉，报的变量名还带着乱码字节。
+    规则：**变量后面紧跟中文标点时一律写 `${VAR}`**。
+    讨厌之处在于 `bash -n` 语法检查照样通过，只有真跑到那一行才炸。
 
 ---
 

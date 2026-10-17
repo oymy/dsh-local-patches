@@ -1,5 +1,5 @@
 diff --git a/packages/api/workspace-controller/src/client/index.ts b/packages/api/workspace-controller/src/client/index.ts
-index c3182102a7..70a08c3e06 100644
+index 3bbf4670a0..8b679627db 100644
 --- a/packages/api/workspace-controller/src/client/index.ts
 +++ b/packages/api/workspace-controller/src/client/index.ts
 @@ -6,6 +6,7 @@ import {
@@ -152,7 +152,7 @@ index c3182102a7..70a08c3e06 100644
    )
  }
 diff --git a/packages/api/workspace-controller/tests/transport.client.spec.ts b/packages/api/workspace-controller/tests/transport.client.spec.ts
-index b74ddfb394..c216c3df4e 100644
+index b1d6ca2a9b..371b66417e 100644
 --- a/packages/api/workspace-controller/tests/transport.client.spec.ts
 +++ b/packages/api/workspace-controller/tests/transport.client.spec.ts
 @@ -101,12 +101,16 @@ describe('Workspace Controller Client apply', () => {

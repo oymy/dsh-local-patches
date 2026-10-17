@@ -1,5 +1,5 @@
 diff --git a/packages/llm/llm-pi-ai/README.i18n.yaml b/packages/llm/llm-pi-ai/README.i18n.yaml
-index 8afec3d7941..ee28d1e5c6f 100644
+index b751a19d3c..d26512b055 100644
 --- a/packages/llm/llm-pi-ai/README.i18n.yaml
 +++ b/packages/llm/llm-pi-ai/README.i18n.yaml
 @@ -21,8 +21,8 @@
@@ -17,15 +17,15 @@ index 8afec3d7941..ee28d1e5c6f 100644
    en: 376f83206858b601
    zh: 38bb6993609c96a6
  /deepseek-ai-dsh-llm-pi-ai/use-this-package/run-with-reasoning-and-wire-compatibility:
--  en: 86b456496b54854e
--  zh: ff77ca11d39ba8d2
-+  en: dcbabf51ba0f7c5c
-+  zh: ad5774d8a4ebb1ff
+-  en: b58b917e7f250aee
+-  zh: aff599081bac08c3
++  en: f3524acf26b515af
++  zh: 6a0ab4f58fbbf4c7
  /deepseek-ai-dsh-llm-pi-ai/use-this-package/change-configuration-at-runtime:
    en: 92f554e1718614ca
    zh: f17ed3ad3e5d28e2
 diff --git a/packages/llm/llm-pi-ai/README.md b/packages/llm/llm-pi-ai/README.md
-index 7b1708b9572..9217e8a499e 100644
+index af66591776..a83297198d 100644
 --- a/packages/llm/llm-pi-ai/README.md
 +++ b/packages/llm/llm-pi-ai/README.md
 @@ -81,6 +81,7 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
@@ -36,7 +36,7 @@ index 7b1708b9572..9217e8a499e 100644
  | `defaultContextWindow` | `262,144` | Capacity fallback for undescribed models |
  | `defaultMaxTokens` | `32,768` | Output-cap fallback for undescribed models |
  | `requestImagePixelBudget` | `4,194,304` | Total-pixel budget for each deterministic request image |
-@@ -104,6 +105,8 @@ A profile's `models` list replaces the route's installed catalog rather than ext
+@@ -106,6 +107,8 @@ Exact-model metadata lists `reasoning.efforts` from least to greatest selectable
  
  For self-hosted Chat Completions endpoints, `thinkingTokenBudgetField` selects the reasoning-budget parameter, and `vllmPriority` sets an integer scheduler priority when the server enables priority scheduling. Template arguments accept `$var: thinking.budget`. `openai-responses` gateways can set `supportsMaxOutputTokens: false` to omit `max_output_tokens`; Azure and Codex transports ignore this shared compatibility field. These controls are opt-in; catalog-owned Anthropic effort and fallback capabilities are not configurable switches.
  
@@ -46,7 +46,7 @@ index 7b1708b9572..9217e8a499e 100644
  
  Each operation captures the current `providers` Config reference. New or changed provider profiles are validated before form persistence; unchanged catalog failures remain editable. Route-set or retry-policy changes update registration atomically, preserving previous routes if another adapter owns a requested route.
 diff --git a/packages/llm/llm-pi-ai/README.zh.md b/packages/llm/llm-pi-ai/README.zh.md
-index ed780ad235b..96213d503a6 100644
+index b5e79c14a2..f8042f2b24 100644
 --- a/packages/llm/llm-pi-ai/README.zh.md
 +++ b/packages/llm/llm-pi-ai/README.zh.md
 @@ -81,6 +81,7 @@ kind: "package-reference"
@@ -57,7 +57,7 @@ index ed780ad235b..96213d503a6 100644
  | `defaultContextWindow` | `262,144` | 未描述模型的容量回退 |
  | `defaultMaxTokens` | `32,768` | 未描述模型的输出上限回退 |
  | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
-@@ -104,6 +105,8 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每
+@@ -106,6 +107,8 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每
  
  对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。
  
@@ -67,28 +67,28 @@ index ed780ad235b..96213d503a6 100644
  
  每次操作捕获当前 `providers` Config 引用。新增或修改的 provider 配置在表单持久化前验证；未更改的目录故障仍可编辑。路由集合或重试策略变化时原子更新注册；如果其他适配器已拥有所请求的路由，则保留先前路由。
 diff --git a/packages/llm/llm-pi-ai/src/adapter.ts b/packages/llm/llm-pi-ai/src/adapter.ts
-index de9f3e0e427..b6bb9e5a54c 100644
+index a912fff69f..eb430131ea 100644
 --- a/packages/llm/llm-pi-ai/src/adapter.ts
 +++ b/packages/llm/llm-pi-ai/src/adapter.ts
-@@ -58,7 +58,7 @@ import type {
+@@ -59,7 +59,7 @@ import type {
  import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
  import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
  import type { ResolvedPiAiProviderProfile } from './config.ts'
--import { toPiContext } from './context.ts'
-+import { repeatReasoningBeforeEachToolCall, toPiContext } from './context.ts'
- import { createModels, getSupportedThinkingLevels } from './models.ts'
+-import { requestImageTarget, toPiContext } from './context.ts'
++import { repeatReasoningBeforeEachToolCall, requestImageTarget, toPiContext } from './context.ts'
+ import { conversationUpdates, createModels, getSupportedThinkingLevels } from './models.ts'
  import { toStreamChunks } from './stream.ts'
  
-@@ -366,7 +366,7 @@ export class PiAiAdapter extends LlmAdapter {
+@@ -402,7 +402,7 @@ export class PiAiAdapter extends LlmAdapter {
        const onReplayDegrade = (reason: string): void => {
          this.config.onReplayDegrade?.({ provider: options.provider, model: options.model, reason })
        }
 -      const context = attachments === undefined
 +      const baseContext = attachments === undefined
-         ? toPiContext(options, undefined, onReplayDegrade)
-         : await toPiContext({ ...options, signal: watchdog.signal }, {
+         ? toPiContext(request, undefined, onReplayDegrade)
+         : await toPiContext({ ...request, signal: watchdog.signal }, {
            attachments,
-@@ -377,6 +377,9 @@ export class PiAiAdapter extends LlmAdapter {
+@@ -413,6 +413,9 @@ export class PiAiAdapter extends LlmAdapter {
              maxBytes: profile.requestImageMaxBytes,
            },
          }, onReplayDegrade)
@@ -99,7 +99,7 @@ index de9f3e0e427..b6bb9e5a54c 100644
          ...profileOptions(profile, reasoning, apiKey),
          ...options.temperature === undefined ? {} : { temperature: options.temperature },
 diff --git a/packages/llm/llm-pi-ai/src/config.ts b/packages/llm/llm-pi-ai/src/config.ts
-index b07cd57bfb3..22054fd0f37 100644
+index b07cd57bfb..22054fd0f3 100644
 --- a/packages/llm/llm-pi-ai/src/config.ts
 +++ b/packages/llm/llm-pi-ai/src/config.ts
 @@ -150,6 +150,13 @@ export interface PiAiProviderProfile {
@@ -147,19 +147,19 @@ index b07cd57bfb3..22054fd0f37 100644
          provider,
          displayName,
 diff --git a/packages/llm/llm-pi-ai/src/context.ts b/packages/llm/llm-pi-ai/src/context.ts
-index 84bfeab4f35..fb799c3b456 100644
+index c819f44301..3a49b98b9d 100644
 --- a/packages/llm/llm-pi-ai/src/context.ts
 +++ b/packages/llm/llm-pi-ai/src/context.ts
 @@ -14,7 +14,7 @@ import type {
    ImageRequestTarget,
    RequestImageAttachment,
  } from '@deepseek-ai/dsh-attachment'
--import type { Context as PiContext, ImageContent, Message as PiMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
-+import type { AssistantMessage, Context as PiContext, ImageContent, Message as PiMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
+-import type { Context as PiContext, ImageContent, Message as PiMessage, SystemMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
++import type { AssistantMessage, Context as PiContext, ImageContent, Message as PiMessage, SystemMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
  import { toPiAssistant } from './replay.ts'
  import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
  import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
-@@ -206,6 +206,87 @@ function appendSystemOrAssistant(
+@@ -237,6 +237,87 @@ function appendSharedHistory(
    return false
  }
  
@@ -248,7 +248,7 @@ index 84bfeab4f35..fb799c3b456 100644
    assertSupportedHistory(options.messages)
    const split = splitSystemPrompt(options)
 diff --git a/packages/llm/llm-pi-ai/tests/config.spec.ts b/packages/llm/llm-pi-ai/tests/config.spec.ts
-index fe667fe58d2..30deb1e51dd 100644
+index fe667fe58d..30deb1e51d 100644
 --- a/packages/llm/llm-pi-ai/tests/config.spec.ts
 +++ b/packages/llm/llm-pi-ai/tests/config.spec.ts
 @@ -55,6 +55,26 @@ describe('reasoning schema boundary', () => {
@@ -279,7 +279,7 @@ index fe667fe58d2..30deb1e51dd 100644
  
  describe('modality schema boundary', () => {
 diff --git a/packages/llm/llm-pi-ai/tests/convert.spec.ts b/packages/llm/llm-pi-ai/tests/convert.spec.ts
-index 4ca36d762a1..65c8bb65a24 100644
+index d6c86ba4b8..95d7bbea1a 100644
 --- a/packages/llm/llm-pi-ai/tests/convert.spec.ts
 +++ b/packages/llm/llm-pi-ai/tests/convert.spec.ts
 @@ -6,7 +6,7 @@ import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -291,7 +291,7 @@ index 4ca36d762a1..65c8bb65a24 100644
  import { toPiReplayState } from '../src/replay.ts'
  import { mapStopReason, mapUsage, toStreamChunks } from '../src/stream.ts'
  
-@@ -404,6 +404,211 @@ describe('toPiContext', () => {
+@@ -403,6 +403,211 @@ describe('toPiContext', () => {
      })
    })
  
@@ -505,7 +505,7 @@ index 4ca36d762a1..65c8bb65a24 100644
        api: 'anthropic-messages',
 diff --git a/packages/llm/llm-pi-ai/tests/responses-replay.spec.ts b/packages/llm/llm-pi-ai/tests/responses-replay.spec.ts
 new file mode 100644
-index 00000000000..41b44abfcac
+index 0000000000..41b44abfca
 --- /dev/null
 +++ b/packages/llm/llm-pi-ai/tests/responses-replay.spec.ts
 @@ -0,0 +1,101 @@
