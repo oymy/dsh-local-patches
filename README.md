@@ -502,6 +502,11 @@ grep -c REBUILD_BASE_MS /tmp/served.js          # 期望 2
 
 **注意**：`~/.dsh/dsh-web.log` 里有登录 token，记得 `chmod 600`。
 
+> ⚠️ **这个日志只由 `restart-web.sh` 写入。** 宿主若是手动在终端里起的（`dsh web`），
+> 它的输出进了那个终端，日志停在**上一次脚本重启**的时间戳，里面的 token 早已失效——
+> 照着上面的命令抓会拿到 `401`，很容易误判成"服务挂了"。
+> 判断方法：`stat -f%Sm ~/.dsh/dsh-web.log` 和宿主的启动时间（`ps -p <pid> -o lstart`）对不对得上。
+
 ### 读 boot payload 的两个坑（都真实踩过）
 
 1. **boot payload 里有几十个 combo，不是 1 个。** 除了那个把全部模块打进 `bootstrap` 的大批次，
