@@ -81,12 +81,13 @@ topics            : ai-agents, cordis, dsh, dsh-plugin
 | **月级巡检一次** | 升到当时最新的稳定 tag 即可 |
 | 紧急（安全或阻断性问题） | 立刻升 |
 
-`probe.sh` 会明确告诉你"两个目标包是否被上游改到"——**上一轮 `0.1.7-alpha.2 → 0.1.7-rc.1` 两个包源码一行没动**，
-重建产物与上一版 **sha256 完全相同**，那次升级纯粹是把同样的字节拷回去。
+`probe.sh` 会明确告诉你"两个目标包是否被上游改到"——历史上确实出现过**两个包源码一行没动**的升级
+（`0.1.7-alpha.2 → 0.1.7-rc.1`），重建产物与上一版 **sha256 完全相同**，那次纯粹是把同样的字节拷回去。
+但**别指望总这么便宜**：`0.2.0-rc.1 → 0.2.1-rc.2` 就动了 `adapter.ts`、`context.ts`，补丁必须手工解冲突。
 所以先跑 probe，再决定要不要花那 25 分钟。
 
-> 前提是这台机器内存够。整仓 `pnpm install` 在 16 GB 机器上会 OOM（见 §6.2），
-> 靠"跳过整仓 install、只补 workspace 链接"绕过。
+> 前提是这台机器内存够。真正的重活是**不带** `--frozen-lockfile` 的完整依赖解析（16 GB 机器会 OOM，见 §6 第 2 条）；
+> 加上 `--frozen-lockfile` 后只是按 lockfile 建链接，实测全仓 366 个 workspace 项目 58 秒装完。
 
 ### 4.1 先判断这次升级是轻松还是艰难
 
@@ -103,11 +104,11 @@ bash scripts/probe.sh 0.2.1-rc.2
 
 这一步通常 1 分钟内给出结论：**"直接应用"** 还是 **"需要适配 N 处"**。
 
-> ⚠️ **跨多版本升级时，probe 的"目标包是否被改到"会偏低。**
-> 它算的是**紧邻的上一个 tag** → 目标 tag，而补丁的基线是**我们当前跑的版本**。
-> 例：`0.2.0-rc.1 → 0.2.1-rc.2` 时 probe 只比 `0.2.1-rc.1 → 0.2.1-rc.2`（9 个提交），
-> 于是显示"只改了 `package.json`"，但 `src/adapter.ts` / `src/context.ts` 实际被改了几十行，
-> 补丁在代码区冲突。**结论以 §5 的 `git apply --check` 为准，别只看 §3。**
+> ✅ **probe 的对比基线已改为「本地正在跑的版本」**（`probe.sh <目标> [基线]`，第二个参数可覆盖）。
+> 早期版本比的是**紧邻的上一个 tag**，跨多版本升级时会严重低估目标包的改动：
+> `0.2.0-rc.1 → 0.2.1-rc.2` 那次只比了 `0.2.1-rc.1 → 0.2.1-rc.2`（9 个提交），显示"只改了 `package.json`"，
+> 而完整跨度里 `src/adapter.ts` / `src/context.ts` 实际被改了几十行，补丁在代码区冲突。
+> 即便如此，**最终结论仍以 probe 第 5 段的 `git apply --check` 为准**，第 3 段只是预警。
 
 ### 4.2 移植
 
@@ -128,7 +129,7 @@ git apply       <repo>/patches/0003-docs-and-notes.patch
 |---|---|
 | 两边各加了一行 `import` | **两个都留**，合成一行 |
 | 上游改了变量名（如 `options` → `request`）我们在附近插入 | **保留上游新名**，把我们的行跟上（`repeatReasoningBeforeEachToolCall(baseContext)`） |
-| 生成文件（`README.i18n.yaml`）的哈希行 | 随便取一边，§4.4 重新生成会覆盖 |
+| 生成文件（`README.i18n.yaml`）的哈希行 | 随便取一边，§4.5 重新生成会覆盖 |
 
 解完先自检有没有漏：
 
@@ -136,7 +137,7 @@ git apply       <repo>/patches/0003-docs-and-notes.patch
 grep -rln '^<<<<<<<' packages/ docs/ .agents/     # 必须为空
 ```
 
-### 4.2.5 同步依赖（**上游换了依赖版本就必须做**）
+### 4.3 同步依赖（**上游换了依赖版本就必须做**）
 
 ```bash
 cd <deepseek-harness clone>
@@ -156,7 +157,7 @@ corepack pnpm install --frozen-lockfile --child-concurrency=2 --network-concurre
 `0.2.1-rc.2` 把 `@earendil-works/pi-ai` 从 `^0.85.1` 提到 **`^1.1.0`**（跨大版本），
 不装就会在测试里看到 `TypeError: getAllBuiltinModels is not a function`。
 
-### 4.3 测试 + 构建
+### 4.4 测试 + 构建
 
 ```bash
 node_modules/.bin/vitest run packages/api/workspace-controller/tests/ packages/llm/llm-pi-ai/tests/
@@ -209,7 +210,7 @@ rm tsdown.tmp-build.config.ts
 > 另外别忘了**验收上游新版符号也在**，防止把上游代码打丢——
 > 例如 `0.2.1-rc.2` 应同时看到 `getAllBuiltinModels`、`conversationUpdates`、`requestImageTarget`。
 
-### 4.4 重新生成文档（冲突的生成文件）
+### 4.5 重新生成文档（冲突的生成文件）
 
 ```bash
 node_modules/.bin/tsx scripts/gen-config-catalog.ts                                  # 会同时写 .md 和 .zh.md
@@ -221,7 +222,7 @@ node_modules/.bin/tsx scripts/gen-config-catalog.ts --check                     
 生成文件**不要手工改**——`README.i18n.yaml` 里的哈希是正文的摘要，手改必错，
 跑一次 `--write` 让它自己算。
 
-### 4.5 提交 + 出补丁
+### 4.6 提交 + 出补丁
 
 ```bash
 LEFTHOOK=0 git commit -m "fix(local): port both fixes onto 0.2.1-rc.2"
@@ -248,7 +249,7 @@ git -C <clone> rev-parse 'HEAD^{tree}'           # 记为 T2，必须 T1 == T2
 
 顺带把旧补丁集归档：`mkdir -p patches/archive/<旧版本> && mv patches/000*.patch patches/archive/<旧版本>/`。
 
-### 4.6 切换 + 重启
+### 4.7 切换 + 重启
 
 ```bash
 bash scripts/switch.sh 0.2.1-rc.2     # 备份 → 装全局 → 覆盖产物 → 验收符号 → --dump-config 预检
@@ -270,7 +271,7 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 
 出问题就 `bash scripts/rollback.sh 0.2.0-rc.1`。
 
-### 4.7 检查 profile 的 bundles 是否还够用（**别跳过**）
+### 4.8 检查 profile 的 bundles 是否还够用（**别跳过**）
 
 上游会在版本之间把功能在 bundle 之间**搬家**，而且不打招呼。搬家后 profile 若仍只列老 bundle，
 **功能会静默消失**——不报错、不崩溃，就是界面里少了一块。
@@ -398,7 +399,7 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
    实测这台"超订"的 16 GB 机器上，`corepack pnpm install --frozen-lockfile` 把 366 个
    workspace 项目**58 秒装完、无 OOM**（它只按 lockfile 建链接，不重算依赖图）。
    会 OOM 的是**不带** `--frozen-lockfile` 的完整解析（`node::worker::Worker::Run` → SIGABRT 134）。
-   所以先试 frozen 这条路（用法见 §4.2.5），不行再退回"跳过整仓 install、只补 workspace 链接"。
+   所以先试 frozen 这条路（用法见 §4.3），不行再退回"跳过整仓 install、只补 workspace 链接"。
    前提两条：**必须用 `corepack pnpm`**（仓库钉 `pnpm@11.28.5`，全局 9.9 会在 `overrides`
    校验上报 `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH`，而且失败前已经把 `node_modules` 删了）。
    **但先确认机器是否真的超订**——别用错指标（见下一条），确认了就先解决内存，不要给一个可消除的问题建工具。
@@ -503,11 +504,13 @@ grep -c REBUILD_BASE_MS /tmp/served.js          # 期望 2
 
 ### 读 boot payload 的两个坑（都真实踩过）
 
-1. **boot payload 里有 74 个 combo，不是 1 个。** 除了那个 57 模块的 `bootstrap` 大批次，
+1. **boot payload 里有几十个 combo，不是 1 个。** 除了那个把全部模块打进 `bootstrap` 的大批次，
    每个模块还有自己的**单模块 combo**（HMR fallback / batch 失败时的回退地址）。
    **只读第一个（最大的）combo 会得到一份残缺的模块表**——我曾据此误判
    "`dsh-api-workspace-controller` 没被加载，修复①可能失效"，其实它在自己的单模块 combo 里。
-   正确做法：把所有 `plugins/??` 都抓出来取并集（本次合并后 **68 个**唯一模块）。
+   正确做法：把所有 `plugins/??` 都抓出来取并集。
+   （`0.2.0-rc.1` 实测：74 个 combo、`bootstrap` 57 个模块、并集 68 个唯一模块。
+   **这些数字随版本变化，别当常量**，只记住"要取并集"。）
 
 2. **`grep -c` 数的是匹配行数，不是匹配次数。** HTML 是压缩的，`grep -c plugins` 会返回 `1`。
    要数次数用 `grep -o ... | wc -l`，或者在 Python/脚本里用 `str.count()`。

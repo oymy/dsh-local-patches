@@ -43,7 +43,7 @@ say "0. 环境"
 echo "  clone    : $CLONE"
 echo "  补丁集   : $PATCHES"
 echo "  目标标签 : $TAG"
-echo "  当前版本 : $(git describe --tags --abbrev=0 --match 'dsh-v*' HEAD 2>/dev/null || echo '(未知)')"
+echo "  clone 检出: $(git describe --tags --abbrev=0 --match 'dsh-v*' HEAD 2>/dev/null || echo '(未知)')  （不是运行版本）"
 
 say "1. 拉取标签（只拉这一个，不用 --tags）"
 if ! git fetch --quiet origin "tag" "$TAG" 2>/dev/null; then
@@ -142,7 +142,7 @@ if [ "$MOVED" = "0" ]; then
   echo "  ✅ 没有依赖被移出任何 bundle——profile 的 bundles 不用动"
 else
   echo "  ⇒ 把上面「现在在」列的 bundle 加进 ~/.dsh/profiles/web/package.json 的"
-  echo "     dsh.profile.bundles，否则对应功能会静默消失。详见 README §4.7。"
+  echo "     dsh.profile.bundles，否则对应功能会静默消失。详见 README §4.8。"
   echo "     ⚠️ 顺序：先跑 switch.sh（它会备份 profile），再改 bundles。"
 fi
 
@@ -170,7 +170,7 @@ if [ "$CONFLICT" = "0" ]; then
 else
   echo "  ⚠️ $CONFLICT 个补丁冲突（$READY 个干净）。"
   echo "     若冲突只在 README.i18n.yaml / docs/config-catalog.*，那是生成文件，"
-  echo "     重新生成即可（README §4.4），属于机械冲突。"
+  echo "     重新生成即可（README §4.5），属于机械冲突。"
   echo "     若冲突落在 src/ 下的代码，才需要真正的手工适配："
   echo "     用 git apply --3way 应用，按 README §4.2 的三条规则解冲突。"
 fi
