@@ -7,8 +7,8 @@
 > **`patches/` 当前面向 `0.2.1-rc.2`**。历史版本补丁在 `patches/archive/<version>/`。
 > 补丁只对各自的目标版本有效，跨版本用前先 `probe.sh`。
 >
-> 通道快照（**2026-10-17**，会过时，用时现查）：`latest` = `0.2.0-rc.2`，
-> `next` = `0.2.1-rc.2`，`alpha` = `0.2.1-alpha.5`。
+> 通道快照（**2026-10-19**，会过时，用时现查）：`latest` = `next` = `0.2.1-rc.2`，
+> `alpha` = `0.2.1-alpha.5`。
 > 查命令：`npm view @deepseek-ai/dsh dist-tags`。
 
 ---
@@ -266,7 +266,9 @@ bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消
 > 升级前先 `npm view @deepseek-ai/dsh dist-tags` 看清三个通道各指向哪里。
 >
 > 注意上面那条**不是永久规律**：2026-09-29 起 `latest` 追上了 `0.2.0-rc.2`，
-> 此期间 `@latest` 反而能装到**更新**的版本。
+> 此期间 `@latest` 反而能装到**更新**的版本；2026-10-19 起 `latest` 又追上了 `0.2.1-rc.2`。
+> 也就是说**每次 RC 转正后，裸装都是安全的；两次转正之间的窗口期才危险**。
+> 而窗口期恰恰是最想升级的时候（新版本刚出），所以别靠记忆，敲之前查一次 `dist-tags`。
 > 规则的本体是「**别信通道名，先查 `dist-tags`**」，而不是「`latest` 总是旧的」。
 
 出问题就 `bash scripts/rollback.sh 0.2.0-rc.1`。
@@ -349,7 +351,7 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | DSH 版本 | 补丁集 | 移植分支 | 测试 |
 |---|---|---|---|
-| `0.2.1-rc.2`（当前运行，`next` 通道） | `patches/` | `port/0.2.1-rc.2` @ `e99f25be71` | 24 文件 / 495 用例 |
+| `0.2.1-rc.2`（当前运行，`latest` = `next` 通道） | `patches/` | `port/0.2.1-rc.2` @ `e99f25be71` | 24 文件 / 495 用例 |
 | `0.2.0-rc.1` | `patches/archive/0.2.0-rc.1` | `port/0.2.0-rc.1` @ `7c3e08e3e0` | 20 文件 / 417 用例 |
 | `0.1.7-rc.2` | `patches/archive/0.1.7-rc.2` | `port/0.1.7-rc.2` @ `973dbf43ed` | 20 文件 / 417 用例 |
 | `0.1.7-rc.1` | `patches/archive/0.1.7-rc.1` | `port/0.1.7-rc.1` @ `071343ae62` | 20 文件 / 429 用例 |
