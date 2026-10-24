@@ -4,11 +4,11 @@
 
 本仓库**只装补丁和脚本，不装 DSH 源码**。升级时从上游拉取，打完补丁再构建。
 
-> **`patches/` 当前面向 `0.2.1-rc.2`**。历史版本补丁在 `patches/archive/<version>/`。
+> **`patches/` 当前面向 `0.2.1-rc.3`**。历史版本补丁在 `patches/archive/<version>/`。
 > 补丁只对各自的目标版本有效，跨版本用前先 `probe.sh`。
 >
-> 通道快照（**2026-10-19**，会过时，用时现查）：`latest` = `next` = `0.2.1-rc.2`，
-> `alpha` = `0.2.1-alpha.5`。
+> 通道快照（**2026-10-24**，会过时，用时现查）：`latest` = `0.2.1-rc.2`，
+> `next` = `0.2.1-rc.3`，`alpha` = `0.2.1-alpha.5`。
 > 查命令：`npm view @deepseek-ai/dsh dist-tags`。
 
 ---
@@ -92,7 +92,7 @@ topics            : ai-agents, cordis, dsh, dsh-plugin
 ### 4.1 先判断这次升级是轻松还是艰难
 
 ```bash
-bash scripts/probe.sh 0.2.1-rc.2
+bash scripts/probe.sh 0.2.1-rc.3
 ```
 
 **全程只读**，不动工作区、不装包、不重启。输出：
@@ -114,8 +114,8 @@ bash scripts/probe.sh 0.2.1-rc.2
 
 ```bash
 cd <deepseek-harness clone>
-git fetch origin tag dsh-v0.2.1-rc.2          # 只拉需要的 tag，别用 --tags
-git checkout -b port/0.2.1-rc.2 dsh-v0.2.1-rc.2
+git fetch origin tag dsh-v0.2.1-rc.3          # 只拉需要的 tag，别用 --tags
+git checkout -b port/0.2.1-rc.3 dsh-v0.2.1-rc.3
 
 git apply       <repo>/patches/0001-workspace-stream-rebuild.patch
 git apply --3way <repo>/patches/0002-responses-reasoning-replay.patch
@@ -208,7 +208,7 @@ rm tsdown.tmp-build.config.ts
 > 为什么要临时配置：仓库根的单文件打包会去解析 typert 的 `brand-font.css` 而失败。
 > `entry` 指到 `lib/types/index.js`（`tsc` 的产物）正好绕开。
 > 另外别忘了**验收上游新版符号也在**，防止把上游代码打丢——
-> 例如 `0.2.1-rc.2` 应同时看到 `getAllBuiltinModels`、`conversationUpdates`、`requestImageTarget`。
+> 例如 `0.2.1-rc.3` 应同时看到 `getAllBuiltinModels`、`conversationUpdates`、`requestImageTarget`。
 
 ### 4.5 重新生成文档（冲突的生成文件）
 
@@ -225,9 +225,9 @@ node_modules/.bin/tsx scripts/gen-config-catalog.ts --check                     
 ### 4.6 提交 + 出补丁
 
 ```bash
-LEFTHOOK=0 git commit -m "fix(local): port both fixes onto 0.2.1-rc.2"
-git diff dsh-v0.2.1-rc.2 HEAD -- packages/api/workspace-controller > patches/0001-....patch
-git diff dsh-v0.2.1-rc.2 HEAD -- packages/llm/llm-pi-ai             > patches/0002-....patch
+LEFTHOOK=0 git commit -m "fix(local): port both fixes onto 0.2.1-rc.3"
+git diff dsh-v0.2.1-rc.3 HEAD -- packages/api/workspace-controller > patches/0001-....patch
+git diff dsh-v0.2.1-rc.3 HEAD -- packages/llm/llm-pi-ai             > patches/0002-....patch
 git diff dsh-v0.2.1-rc.2 HEAD -- docs/config-catalog.md docs/config-catalog.zh.md \
   '.agents/notes/implemented/bug-fix/*'                             > patches/0003-....patch
 ```
@@ -239,7 +239,7 @@ git diff dsh-v0.2.1-rc.2 HEAD -- docs/config-catalog.md docs/config-catalog.zh.m
 这是唯一能证明"补丁集 = 这次移植的全部改动"的检查：
 
 ```bash
-git worktree add --detach /tmp/verify dsh-v0.2.1-rc.2
+git worktree add --detach /tmp/verify dsh-v0.2.1-rc.3
 cd /tmp/verify
 for p in <repo>/patches/000*.patch; do git apply "$p"; done
 git add -A
@@ -252,7 +252,7 @@ git -C <clone> rev-parse 'HEAD^{tree}'           # 记为 T2，必须 T1 == T2
 ### 4.7 切换 + 重启
 
 ```bash
-bash scripts/switch.sh 0.2.1-rc.2     # 备份 → 装全局 → 覆盖产物 → 验收符号 → --dump-config 预检
+bash scripts/switch.sh 0.2.1-rc.3     # 备份 → 装全局 → 覆盖产物 → 验收符号 → --dump-config 预检
 bash scripts/restart-web.sh 30        # 延迟 30 秒自我脱离重启（让消息先发出去）
 ```
 
@@ -329,7 +329,8 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 改完用 `dsh --profile web --dump-config`（**必须带 `--profile`**）复核：
 退出码 0、行数合理、被搬走的功能关键字确实出现在输出里。行数是有用的信号——
 `0.1.7-rc.2` = 1393 行 → 裸装 0.2.0-rc.1 = 1406 行 → 补 bundle 后 = 1413 行；
-`0.2.0-rc.1` = 1423 行 → `0.2.1-rc.2` = 1385 行（**行数变少不一定有问题，见下**）。
+`0.2.0-rc.1` = 1423 行 → `0.2.1-rc.2` = 1385 行 → `0.2.1-rc.3` = 1471 行
+（**行数变化不一定是问题，见下**）。
 
 **判断搬家到底有没有损失，看插件是否 `disabled: true`。** 下面是 `0.2.1-rc.2` 的实测：
 
@@ -351,7 +352,8 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | DSH 版本 | 补丁集 | 移植分支 | 测试 |
 |---|---|---|---|
-| `0.2.1-rc.2`（当前运行，`latest` = `next` 通道） | `patches/` | `port/0.2.1-rc.2` @ `e99f25be71` | 24 文件 / 495 用例 |
+| `0.2.1-rc.3`（当前运行，`next` 通道） | `patches/` | `port/0.2.1-rc.3` @ `925ff24a76` | 24 文件 / 495 用例 |
+| `0.2.1-rc.2`（`latest` 通道） | `patches/archive/0.2.1-rc.2` | `port/0.2.1-rc.2` @ `e99f25be71` | 24 文件 / 495 用例 |
 | `0.2.0-rc.1` | `patches/archive/0.2.0-rc.1` | `port/0.2.0-rc.1` @ `7c3e08e3e0` | 20 文件 / 417 用例 |
 | `0.1.7-rc.2` | `patches/archive/0.1.7-rc.2` | `port/0.1.7-rc.2` @ `973dbf43ed` | 20 文件 / 417 用例 |
 | `0.1.7-rc.1` | `patches/archive/0.1.7-rc.1` | `port/0.1.7-rc.1` @ `071343ae62` | 20 文件 / 429 用例 |
@@ -363,6 +365,7 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | 升级 | commits / 文件 | 目标包有改动吗 | 补丁冲突 |
 |---|---|---|---|
+| `0.2.1-rc.2` → `0.2.1-rc.3` | 6 / 640 | ❌ 两个目标包只改 `package.json` | 无（**三个补丁直接应用**） |
 | `0.2.0-rc.1` → `0.2.1-rc.2` | 2112 / 300+ | ✅ `adapter.ts`、`context.ts`、`catalog.ts` 均改 | ✅ 代码区 2 处，手工解 |
 | `0.2.0-rc.1` → `0.2.0-rc.2` | 187 / 1022 | ❌ 只改 `package.json` + 无关文件 | 无（**已探，跳过未升**） |
 | `0.1.7-rc.2` → `0.2.0-rc.1` | 261 / 1109 | ❌ 只改 `package.json` + 无关文件 | 无 |
@@ -482,6 +485,16 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
     规则：**变量后面紧跟中文标点时一律写 `${VAR}`**。
     讨厌之处在于 `bash -n` 语法检查照样通过，只有真跑到那一行才炸。
 
+13. **`--dump-config` 退出 0 不代表所有插件都加载了——必须看 stderr。**
+    第三方插件若在 `peerDependencies` 里**精确钉死** DSH 版本（如
+    `"@deepseek-ai/dsh-tools": "0.2.1-rc.2"`），升级后会被判定不兼容而**跳过**，
+    但退出码仍是 0，只在 stderr 打一行 `dsh: skipping profile bundle "<name>": ...`。
+    实测 `0.2.1-rc.2 → 0.2.1-rc.3` 就因此丢了 `dsh-session-tools`，而它依赖的
+    `@deepseek-ai/dsh-tools` 两个版本**字节完全相同**——约束过严，不是真不兼容。
+    处理：改插件声明成范围，或
+    `dsh plugin --profile <p> allow-version <pkg@ver> --dsh-version <运行版本> --accept-risk`
+    （豁免记录在 profile 的 `compatibility.json`，**每次升级都要重新授权**）。
+    所以升级验收清单里加一条：`wc -c /tmp/dsh-switch-dump.err` 应为 0。
 ---
 
 ## 7. 验证：怎么证明"前端真的拿到了修复"

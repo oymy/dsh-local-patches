@@ -6,13 +6,13 @@
 # 回滚：scripts/rollback.sh <上一个版本>
 #
 # 用法：
-#   bash scripts/switch.sh 0.2.1-rc.2
-#   DSH_CLONE=/path DSH_GLOBAL=/path bash scripts/switch.sh 0.2.1-rc.2
+#   bash scripts/switch.sh 0.2.1-rc.3
+#   DSH_CLONE=/path DSH_GLOBAL=/path bash scripts/switch.sh 0.2.1-rc.3
 set -euo pipefail
 
 VERSION="${1:-}"
 if [ -z "$VERSION" ]; then
-  echo "用法: switch.sh <目标版本>   例如: switch.sh 0.2.1-rc.2" >&2
+  echo "用法: switch.sh <目标版本>   例如: switch.sh 0.2.1-rc.3" >&2
   exit 2
 fi
 

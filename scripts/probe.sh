@@ -5,9 +5,9 @@
 # 以及一个用完即删的临时 worktree。
 #
 # 用法：
-#   bash scripts/probe.sh 0.2.1-rc.2            # 基线自动取「本地正在跑的版本」
-#   bash scripts/probe.sh 0.2.1-rc.2 0.2.0-rc.1 # 显式指定基线
-#   DSH_CLONE=/path/to/deepseek-harness bash scripts/probe.sh 0.2.1-rc.2
+#   bash scripts/probe.sh 0.2.1-rc.3            # 基线自动取「本地正在跑的版本」
+#   bash scripts/probe.sh 0.2.1-rc.3 0.2.0-rc.1 # 显式指定基线
+#   DSH_CLONE=/path/to/deepseek-harness bash scripts/probe.sh 0.2.1-rc.3
 #
 # 输出结论：三个补丁各自「可直接应用 / 冲突」、两个目标包是否被上游改到、
 #           以及 bundle 依赖有没有搬家（功能静默消失的预警）。
@@ -15,7 +15,7 @@ set -euo pipefail
 
 VERSION="${1:-}"
 if [ -z "$VERSION" ]; then
-  echo "用法: probe.sh <version>   例如: probe.sh 0.2.1-rc.2" >&2
+  echo "用法: probe.sh <version>   例如: probe.sh 0.2.1-rc.3" >&2
   exit 2
 fi
 
