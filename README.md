@@ -4,11 +4,11 @@
 
 本仓库**只装补丁和脚本，不装 DSH 源码**。升级时从上游拉取，打完补丁再构建。
 
-> **`patches/` 当前面向 `0.2.1-rc.3`**。历史版本补丁在 `patches/archive/<version>/`。
+> **`patches/` 当前面向 `0.2.2-alpha.3`**。历史版本补丁在 `patches/archive/<version>/`。
 > 补丁只对各自的目标版本有效，跨版本用前先 `probe.sh`。
 >
-> 通道快照（**2026-10-24**，会过时，用时现查）：`latest` = `0.2.1-rc.2`，
-> `next` = `0.2.1-rc.3`，`alpha` = `0.2.1-alpha.5`。
+> 通道快照（**2026-11-04**，会过时，用时现查）：`latest` = `0.2.1-rc.5`，
+> `next` = `0.2.1-rc.5`，`alpha` = `0.2.2-alpha.3`。
 > 查命令：`npm view @deepseek-ai/dsh dist-tags`。
 
 ---
@@ -352,7 +352,9 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | DSH 版本 | 补丁集 | 移植分支 | 测试 |
 |---|---|---|---|
-| `0.2.1-rc.3`（当前运行，`next` 通道） | `patches/` | `port/0.2.1-rc.3` @ `925ff24a76` | 24 文件 / 495 用例 |
+| `0.2.2-alpha.3`（当前运行，`alpha` 通道） | `patches/` | `port/0.2.2-alpha.3` @ `fc3ca05472` | 26 文件 / 528 用例 |
+| `0.2.2-alpha.2` | `patches/archive/0.2.2-alpha.2` | `port/0.2.2-alpha.2` @ `b29a27c810` | 25 文件 / 515 用例 |
+| `0.2.1-rc.3`（`latest` 曾到达） | `patches/archive/0.2.1-rc.3` | `port/0.2.1-rc.3` @ `925ff24a76` | 24 文件 / 495 用例 |
 | `0.2.1-rc.2`（`latest` 通道） | `patches/archive/0.2.1-rc.2` | `port/0.2.1-rc.2` @ `e99f25be71` | 24 文件 / 495 用例 |
 | `0.2.0-rc.1` | `patches/archive/0.2.0-rc.1` | `port/0.2.0-rc.1` @ `7c3e08e3e0` | 20 文件 / 417 用例 |
 | `0.1.7-rc.2` | `patches/archive/0.1.7-rc.2` | `port/0.1.7-rc.2` @ `973dbf43ed` | 20 文件 / 417 用例 |
@@ -365,6 +367,8 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | 升级 | commits / 文件 | 目标包有改动吗 | 补丁冲突 |
 |---|---|---|---|
+| `0.2.2-alpha.2` → `0.2.2-alpha.3` | 462 / 2315 | ✅ 两个目标包都改（11+1 文件） | ✅ 代码区 2 处，手工解 |
+| `0.2.1-rc.3` → `0.2.2-alpha.2` | 2170 / 7251 | ✅ 两包大改（22+7 文件） | ✅ 代码区 3 处，手工解 |
 | `0.2.1-rc.2` → `0.2.1-rc.3` | 6 / 640 | ❌ 两个目标包只改 `package.json` | 无（**三个补丁直接应用**） |
 | `0.2.0-rc.1` → `0.2.1-rc.2` | 2112 / 300+ | ✅ `adapter.ts`、`context.ts`、`catalog.ts` 均改 | ✅ 代码区 2 处，手工解 |
 | `0.2.0-rc.1` → `0.2.0-rc.2` | 187 / 1022 | ❌ 只改 `package.json` + 无关文件 | 无（**已探，跳过未升**） |

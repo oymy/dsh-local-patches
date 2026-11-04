@@ -1,15 +1,15 @@
 diff --git a/packages/llm/llm-pi-ai/README.i18n.yaml b/packages/llm/llm-pi-ai/README.i18n.yaml
-index b751a19d3c..d26512b055 100644
+index ac4a8c4bd6..c5a948d0ab 100644
 --- a/packages/llm/llm-pi-ai/README.i18n.yaml
 +++ b/packages/llm/llm-pi-ai/README.i18n.yaml
 @@ -21,8 +21,8 @@
    en: f3b761c7c7ecb82f
    zh: e10d999aa348ef86
  /deepseek-ai-dsh-llm-pi-ai/use-this-package/configure-provider-routes:
--  en: c5d28300fa2cfc6f
--  zh: c162855dcb54b65b
-+  en: c9d9fb9f52f51832
-+  zh: dd7cfb4cb25190ff
+-  en: 12d3d1506c72ac8b
+-  zh: d966efb555110713
++  en: 4f7c0aa1ffe1c5df
++  zh: a63dde3bdce03dfd
  /deepseek-ai-dsh-llm-pi-ai/use-this-package/sign-in-to-a-provider:
    en: c36f66438638ae08
    zh: 066a2fc4cb97c86f
@@ -25,18 +25,18 @@ index b751a19d3c..d26512b055 100644
    en: 92f554e1718614ca
    zh: f17ed3ad3e5d28e2
 diff --git a/packages/llm/llm-pi-ai/README.md b/packages/llm/llm-pi-ai/README.md
-index af66591776..a83297198d 100644
+index 2b1b28395f..69cf3d97fb 100644
 --- a/packages/llm/llm-pi-ai/README.md
 +++ b/packages/llm/llm-pi-ai/README.md
-@@ -81,6 +81,7 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
+@@ -83,6 +83,7 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
  | `models` | installed catalog | Replaces the route's catalog wholesale; each entry defaults from the installed model |
  | `modelOverrides` | none | Reshapes individual installed-catalog models without replacing the rest |
  | `compat` | catalog detection | Wire-compatibility switches for unrecognized endpoints |
 +| `repeatReasoningBeforeEachToolCallModels` | `[]` | Models that replay each signed Responses prelude and interleave every call with its output |
- | `defaultContextWindow` | `262,144` | Capacity fallback for undescribed models |
- | `defaultMaxTokens` | `32,768` | Output-cap fallback for undescribed models |
+ | `defaultContextWindow` | `1,000,000` | Capacity fallback for undescribed models |
+ | `defaultMaxTokens` | `128,000` | Output-cap fallback for undescribed models |
  | `requestImagePixelBudget` | `4,194,304` | Total-pixel budget for each deterministic request image |
-@@ -106,6 +107,8 @@ Exact-model metadata lists `reasoning.efforts` from least to greatest selectable
+@@ -110,6 +111,8 @@ Exact-model metadata lists `reasoning.efforts` from least to greatest selectable
  
  For self-hosted Chat Completions endpoints, `thinkingTokenBudgetField` selects the reasoning-budget parameter, and `vllmPriority` sets an integer scheduler priority when the server enables priority scheduling. Template arguments accept `$var: thinking.budget`. `openai-responses` gateways can set `supportsMaxOutputTokens: false` to omit `max_output_tokens`; Azure and Codex transports ignore this shared compatibility field. These controls are opt-in; catalog-owned Anthropic effort and fallback capabilities are not configurable switches.
  
@@ -46,18 +46,18 @@ index af66591776..a83297198d 100644
  
  Each operation captures the current `providers` Config reference. New or changed provider profiles are validated before form persistence; unchanged catalog failures remain editable. Route-set or retry-policy changes update registration atomically, preserving previous routes if another adapter owns a requested route.
 diff --git a/packages/llm/llm-pi-ai/README.zh.md b/packages/llm/llm-pi-ai/README.zh.md
-index b5e79c14a2..f8042f2b24 100644
+index 0a717288d7..0043310802 100644
 --- a/packages/llm/llm-pi-ai/README.zh.md
 +++ b/packages/llm/llm-pi-ai/README.zh.md
-@@ -81,6 +81,7 @@ kind: "package-reference"
+@@ -83,6 +83,7 @@ kind: "package-reference"
  | `models` | 已安装目录 | 整体替换路由目录；每个条目从已安装模型取默认值 |
  | `modelOverrides` | 无 | 重塑个别已安装目录模型，而不替换其余模型 |
  | `compat` | 目录检测 | 无法识别端点的协议兼容开关 |
 +| `repeatReasoningBeforeEachToolCallModels` | `[]` | 需逐个回放带签名 Responses 前导段，并将每个调用与其输出交错排列的模型 |
- | `defaultContextWindow` | `262,144` | 未描述模型的容量回退 |
- | `defaultMaxTokens` | `32,768` | 未描述模型的输出上限回退 |
+ | `defaultContextWindow` | `1,000,000` | 未描述模型的容量回退 |
+ | `defaultMaxTokens` | `128,000` | 未描述模型的输出上限回退 |
  | `requestImagePixelBudget` | `4,194,304` | 每张确定性请求图片的总像素预算 |
-@@ -106,6 +107,8 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每
+@@ -110,6 +111,8 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每
  
  对于自托管 Chat Completions 端点，`thinkingTokenBudgetField` 选择推理预算参数，`vllmPriority` 在服务端启用优先级调度时设置整数调度优先级。模板参数接受 `$var: thinking.budget`。`openai-responses` 网关可设置 `supportsMaxOutputTokens: false` 来省略 `max_output_tokens`；Azure 与 Codex 传输会忽略这个共享兼容字段。这些控制均需显式启用；目录拥有的 Anthropic effort 和回退能力不是可配置开关。
  
@@ -67,7 +67,7 @@ index b5e79c14a2..f8042f2b24 100644
  
  每次操作捕获当前 `providers` Config 引用。新增或修改的 provider 配置在表单持久化前验证；未更改的目录故障仍可编辑。路由集合或重试策略变化时原子更新注册；如果其他适配器已拥有所请求的路由，则保留先前路由。
 diff --git a/packages/llm/llm-pi-ai/src/adapter.ts b/packages/llm/llm-pi-ai/src/adapter.ts
-index a912fff69f..eb430131ea 100644
+index 1302589633..ccd406cb2b 100644
 --- a/packages/llm/llm-pi-ai/src/adapter.ts
 +++ b/packages/llm/llm-pi-ai/src/adapter.ts
 @@ -59,7 +59,7 @@ import type {
@@ -78,20 +78,20 @@ index a912fff69f..eb430131ea 100644
 +import { repeatReasoningBeforeEachToolCall, requestImageTarget, toPiContext } from './context.ts'
  import { conversationUpdates, createModels, getSupportedThinkingLevels } from './models.ts'
  import { toStreamChunks } from './stream.ts'
- 
-@@ -402,7 +402,7 @@ export class PiAiAdapter extends LlmAdapter {
+ import type { PiAiRequestHeaderContext } from './types.ts'
+@@ -444,7 +444,7 @@ export class PiAiAdapter extends LlmAdapter {
        const onReplayDegrade = (reason: string): void => {
          this.config.onReplayDegrade?.({ provider: options.provider, model: options.model, reason })
        }
 -      const context = attachments === undefined
 +      const baseContext = attachments === undefined
-         ? toPiContext(request, undefined, onReplayDegrade)
+         ? toPiContext(request, undefined, onReplayDegrade, updates.systemPromptUpdate === 'in-history')
          : await toPiContext({ ...request, signal: watchdog.signal }, {
            attachments,
-@@ -413,6 +413,9 @@ export class PiAiAdapter extends LlmAdapter {
+@@ -457,6 +457,9 @@ export class PiAiAdapter extends LlmAdapter {
              maxBytes: profile.requestImageMaxBytes,
            },
-         }, onReplayDegrade)
+         }, onReplayDegrade, updates.systemPromptUpdate === 'in-history')
 +      const context = profile.repeatReasoningBeforeEachToolCallModels?.includes(options.model) === true
 +        ? repeatReasoningBeforeEachToolCall(baseContext)
 +        : baseContext
@@ -99,10 +99,10 @@ index a912fff69f..eb430131ea 100644
          ...profileOptions(profile, reasoning, apiKey),
          ...options.temperature === undefined ? {} : { temperature: options.temperature },
 diff --git a/packages/llm/llm-pi-ai/src/config.ts b/packages/llm/llm-pi-ai/src/config.ts
-index b07cd57bfb..22054fd0f3 100644
+index 9de6c4416e..6472d6ec88 100644
 --- a/packages/llm/llm-pi-ai/src/config.ts
 +++ b/packages/llm/llm-pi-ai/src/config.ts
-@@ -150,6 +150,13 @@ export interface PiAiProviderProfile {
+@@ -163,6 +163,13 @@ export interface PiAiProviderProfile {
    defaultInput?: PiAiModality[]
    /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
    headers?: Record<string, string>
@@ -116,7 +116,7 @@ index b07cd57bfb..22054fd0f3 100644
    /** Provider-neutral pi-ai reasoning level. */
    reasoning?: ModelThinkingLevel
    /** Token budgets used by reasoning providers that support them. */
-@@ -335,6 +342,7 @@ const profile = z.object({
+@@ -364,6 +371,7 @@ const profile = z.object({
    defaultMaxTokens: z.number().step(1).min(1).default(DEFAULT_MAX_TOKENS),
    defaultInput: z.array(z.union(MODALITIES)).default([...DEFAULT_INPUT]),
    headers: z.dict(z.string()),
@@ -124,7 +124,7 @@ index b07cd57bfb..22054fd0f3 100644
    reasoning: z.union(THINKING_LEVELS),
    thinkingBudgets,
    cacheRetention: z.union(['none', 'short', 'long']),
-@@ -475,6 +483,21 @@ export function resolveProfiles(
+@@ -514,6 +522,21 @@ export function resolveProfiles(
          defaultMaxTokens: source.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
        }, validation)
        catalogError = catalog.modelErrors.values().next().value
@@ -147,7 +147,7 @@ index b07cd57bfb..22054fd0f3 100644
          provider,
          displayName,
 diff --git a/packages/llm/llm-pi-ai/src/context.ts b/packages/llm/llm-pi-ai/src/context.ts
-index c819f44301..3a49b98b9d 100644
+index 7f15ad3825..8e696757b7 100644
 --- a/packages/llm/llm-pi-ai/src/context.ts
 +++ b/packages/llm/llm-pi-ai/src/context.ts
 @@ -14,7 +14,7 @@ import type {
@@ -159,7 +159,7 @@ index c819f44301..3a49b98b9d 100644
  import { toPiAssistant } from './replay.ts'
  import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
  import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
-@@ -237,6 +237,87 @@ function appendSharedHistory(
+@@ -245,6 +245,88 @@ function appendSharedHistory(
    return false
  }
  
@@ -244,9 +244,10 @@ index c819f44301..3a49b98b9d 100644
 +  return { ...context, messages }
 +}
 +
- function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: string) => void): PiContext {
-   assertSupportedHistory(options.messages)
-   const split = splitSystemPrompt(options)
++
+ function textOnlyContext(
+   options: GenerateOptions,
+   supportsMidConvoSystemMessages: boolean,
 diff --git a/packages/llm/llm-pi-ai/tests/config.spec.ts b/packages/llm/llm-pi-ai/tests/config.spec.ts
 index fe667fe58d..30deb1e51d 100644
 --- a/packages/llm/llm-pi-ai/tests/config.spec.ts
@@ -279,7 +280,7 @@ index fe667fe58d..30deb1e51d 100644
  
  describe('modality schema boundary', () => {
 diff --git a/packages/llm/llm-pi-ai/tests/convert.spec.ts b/packages/llm/llm-pi-ai/tests/convert.spec.ts
-index d6c86ba4b8..95d7bbea1a 100644
+index a4b3e85955..dceab00708 100644
 --- a/packages/llm/llm-pi-ai/tests/convert.spec.ts
 +++ b/packages/llm/llm-pi-ai/tests/convert.spec.ts
 @@ -6,7 +6,7 @@ import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
