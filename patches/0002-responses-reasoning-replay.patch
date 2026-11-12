@@ -1,5 +1,5 @@
 diff --git a/packages/llm/llm-pi-ai/README.i18n.yaml b/packages/llm/llm-pi-ai/README.i18n.yaml
-index ac4a8c4bd6..c5a948d0ab 100644
+index fd6a360e8b..84d9a8311b 100644
 --- a/packages/llm/llm-pi-ai/README.i18n.yaml
 +++ b/packages/llm/llm-pi-ai/README.i18n.yaml
 @@ -21,8 +21,8 @@
@@ -25,7 +25,7 @@ index ac4a8c4bd6..c5a948d0ab 100644
    en: 92f554e1718614ca
    zh: f17ed3ad3e5d28e2
 diff --git a/packages/llm/llm-pi-ai/README.md b/packages/llm/llm-pi-ai/README.md
-index 2b1b28395f..69cf3d97fb 100644
+index 2bba84d774..48657a3a55 100644
 --- a/packages/llm/llm-pi-ai/README.md
 +++ b/packages/llm/llm-pi-ai/README.md
 @@ -83,6 +83,7 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
@@ -46,7 +46,7 @@ index 2b1b28395f..69cf3d97fb 100644
  
  Each operation captures the current `providers` Config reference. New or changed provider profiles are validated before form persistence; unchanged catalog failures remain editable. Route-set or retry-policy changes update registration atomically, preserving previous routes if another adapter owns a requested route.
 diff --git a/packages/llm/llm-pi-ai/README.zh.md b/packages/llm/llm-pi-ai/README.zh.md
-index 0a717288d7..0043310802 100644
+index 9a964b8681..ba66f32218 100644
 --- a/packages/llm/llm-pi-ai/README.zh.md
 +++ b/packages/llm/llm-pi-ai/README.zh.md
 @@ -83,6 +83,7 @@ kind: "package-reference"
@@ -67,7 +67,7 @@ index 0a717288d7..0043310802 100644
  
  每次操作捕获当前 `providers` Config 引用。新增或修改的 provider 配置在表单持久化前验证；未更改的目录故障仍可编辑。路由集合或重试策略变化时原子更新注册；如果其他适配器已拥有所请求的路由，则保留先前路由。
 diff --git a/packages/llm/llm-pi-ai/src/adapter.ts b/packages/llm/llm-pi-ai/src/adapter.ts
-index 1302589633..ccd406cb2b 100644
+index f3f9ac0090..99aadd5818 100644
 --- a/packages/llm/llm-pi-ai/src/adapter.ts
 +++ b/packages/llm/llm-pi-ai/src/adapter.ts
 @@ -59,7 +59,7 @@ import type {
@@ -78,23 +78,21 @@ index 1302589633..ccd406cb2b 100644
 +import { repeatReasoningBeforeEachToolCall, requestImageTarget, toPiContext } from './context.ts'
  import { conversationUpdates, createModels, getSupportedThinkingLevels } from './models.ts'
  import { toStreamChunks } from './stream.ts'
- import type { PiAiRequestHeaderContext } from './types.ts'
-@@ -444,7 +444,7 @@ export class PiAiAdapter extends LlmAdapter {
-       const onReplayDegrade = (reason: string): void => {
-         this.config.onReplayDegrade?.({ provider: options.provider, model: options.model, reason })
-       }
--      const context = attachments === undefined
-+      const baseContext = attachments === undefined
-         ? toPiContext(request, undefined, onReplayDegrade, updates.systemPromptUpdate === 'in-history')
-         : await toPiContext({ ...request, signal: watchdog.signal }, {
-           attachments,
-@@ -457,6 +457,9 @@ export class PiAiAdapter extends LlmAdapter {
-             maxBytes: profile.requestImageMaxBytes,
-           },
-         }, onReplayDegrade, updates.systemPromptUpdate === 'in-history')
+ import { bindThinkingToPrefix } from './prefix-binding.ts'
+@@ -469,9 +469,15 @@ export class PiAiAdapter extends LlmAdapter {
+         }, onReplayDegrade, updates.systemPromptUpdate === 'in-history', prefixDigests)
+       const manualThinking = model.reasoning && reasoning !== undefined && reasoning !== 'off'
+         && (model as Model<'anthropic-messages'>).compat?.forceAdaptiveThinking !== true
+-      const { context, digest } = bindThinkingToPrefix(converted, model.api, prefixDigests, manualThinking, (count) => {
++      const { context: boundContext, digest } = bindThinkingToPrefix(converted, model.api, prefixDigests, manualThinking, (count) => {
+         this.config.onThinkingOmitted?.({ provider: options.provider, model: options.model, count })
+       })
++      // The replay projection runs after prefix binding: bindThinkingToPrefix only
++      // acts on anthropic-messages, so for openai-responses `digest` is undefined
++      // and `boundContext` is the converted context unchanged.
 +      const context = profile.repeatReasoningBeforeEachToolCallModels?.includes(options.model) === true
-+        ? repeatReasoningBeforeEachToolCall(baseContext)
-+        : baseContext
++        ? repeatReasoningBeforeEachToolCall(boundContext)
++        : boundContext
        const events = snapshot.models.streamSimple(model, context, {
          ...profileOptions(profile, reasoning, apiKey),
          ...options.temperature === undefined ? {} : { temperature: options.temperature },
@@ -147,7 +145,7 @@ index 9de6c4416e..6472d6ec88 100644
          provider,
          displayName,
 diff --git a/packages/llm/llm-pi-ai/src/context.ts b/packages/llm/llm-pi-ai/src/context.ts
-index 7f15ad3825..8e696757b7 100644
+index b77fda933c..87020ffc1b 100644
 --- a/packages/llm/llm-pi-ai/src/context.ts
 +++ b/packages/llm/llm-pi-ai/src/context.ts
 @@ -14,7 +14,7 @@ import type {
@@ -157,9 +155,9 @@ index 7f15ad3825..8e696757b7 100644
 -import type { Context as PiContext, ImageContent, Message as PiMessage, SystemMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
 +import type { AssistantMessage, Context as PiContext, ImageContent, Message as PiMessage, SystemMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
  import { toPiAssistant } from './replay.ts'
+ import type { PrefixDigests } from './prefix-binding.ts'
  import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
- import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
-@@ -245,6 +245,88 @@ function appendSharedHistory(
+@@ -248,6 +248,88 @@ function appendSharedHistory(
    return false
  }
  
@@ -280,7 +278,7 @@ index fe667fe58d..30deb1e51d 100644
  
  describe('modality schema boundary', () => {
 diff --git a/packages/llm/llm-pi-ai/tests/convert.spec.ts b/packages/llm/llm-pi-ai/tests/convert.spec.ts
-index a4b3e85955..dceab00708 100644
+index ff5a65870b..2990a372f5 100644
 --- a/packages/llm/llm-pi-ai/tests/convert.spec.ts
 +++ b/packages/llm/llm-pi-ai/tests/convert.spec.ts
 @@ -6,7 +6,7 @@ import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
