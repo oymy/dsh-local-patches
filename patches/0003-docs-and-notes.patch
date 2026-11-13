@@ -90,10 +90,10 @@ index 0000000000..616d926760
 +
 +部署只能列出由具有此校验规则的网关提供的模型。会话日志仍是原始响应的真源；已配置路由以确定性方式投影相邻的调用/输出对。单元测试固定了说明文字前导段、无签名推理、结果匹配、多调用排序、未知模型与协议校验，以及适配器分派行为。
 diff --git a/docs/config-catalog.md b/docs/config-catalog.md
-index 41bd0207f3..850d4ecdd9 100644
+index e691d06b8a..eeba08377c 100644
 --- a/docs/config-catalog.md
 +++ b/docs/config-catalog.md
-@@ -2022,7 +2022,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
+@@ -2045,7 +2045,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
  
  - `inject`: `llm`
  - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
@@ -102,7 +102,7 @@ index 41bd0207f3..850d4ecdd9 100644
  
  ```ts config-catalog
  /** Plugin configuration: the provider routes this instance owns. */
-@@ -2097,6 +2097,13 @@ export interface PiAiProviderProfile {
+@@ -2120,6 +2120,13 @@ export interface PiAiProviderProfile {
    defaultInput?: PiAiModality[]
    /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
    headers?: Record<string, string>
@@ -117,10 +117,10 @@ index 41bd0207f3..850d4ecdd9 100644
    reasoning?: ModelThinkingLevel
    /** Token budgets used by reasoning providers that support them. */
 diff --git a/docs/config-catalog.zh.md b/docs/config-catalog.zh.md
-index a3bb192363..90030b6aa4 100644
+index 2f7d8eb29f..e40bd9ab7a 100644
 --- a/docs/config-catalog.zh.md
 +++ b/docs/config-catalog.zh.md
-@@ -2024,7 +2024,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
+@@ -2047,7 +2047,7 @@ export interface Config extends ProtocolConfig, ModelListingConfig {
  
  - `inject`: `llm`
  - `refs`: `Api` (`@earendil-works/pi-ai`) · `CacheRetention` (`@earendil-works/pi-ai`) · `Model` (`@earendil-works/pi-ai`) · `ModelThinkingLevel` (`@earendil-works/pi-ai`) · `OpenAICompletionsCompat` (`@earendil-works/pi-ai`) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts) · `ThinkingBudgets` (`@earendil-works/pi-ai`) · `Transport` (`@earendil-works/pi-ai`) · `Volatile` (`@deepseek-ai/cordis`)
@@ -129,7 +129,7 @@ index a3bb192363..90030b6aa4 100644
  
  ```ts config-catalog
  /** Plugin configuration: the provider routes this instance owns. */
-@@ -2099,6 +2099,13 @@ export interface PiAiProviderProfile {
+@@ -2122,6 +2122,13 @@ export interface PiAiProviderProfile {
    defaultInput?: PiAiModality[]
    /** Provider request headers, validated against Fetch when the profile resolves; Harness attribution wins reserved names. */
    headers?: Record<string, string>
