@@ -4,11 +4,11 @@
 
 本仓库**只装补丁和脚本，不装 DSH 源码**。升级时从上游拉取，打完补丁再构建。
 
-> **`patches/` 当前面向 `0.2.2-rc.4`**。历史版本补丁在 `patches/archive/<version>/`。
+> **`patches/` 当前面向 `0.2.2-rc.5`**。历史版本补丁在 `patches/archive/<version>/`。
 > 补丁只对各自的目标版本有效，跨版本用前先 `probe.sh`。
 >
-> 通道快照（**2026-11-18**，会过时，用时现查）：`latest` = `0.2.1-rc.5`，
-> `next` = `0.2.2-rc.4`，`alpha` = `0.2.2-alpha.3`。
+> 通道快照（**2026-11-19**，会过时，用时现查）：`latest` = `0.2.1-rc.5`，
+> `latest` = `next` = `0.2.2-rc.5`，`alpha` = `0.2.2-alpha.3`。
 > 查命令：`npm view @deepseek-ai/dsh dist-tags`。
 
 ---
@@ -352,7 +352,8 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | DSH 版本 | 补丁集 | 移植分支 | 测试 |
 |---|---|---|---|
-| `0.2.2-rc.4`（`next` 通道） | `patches/` | `port/0.2.2-rc.4` @ `cec971e708` | 28 文件 / 549 用例 |
+| `0.2.2-rc.5`（`latest` = `next` 通道） | `patches/` | `port/0.2.2-rc.5` @ `82f95df554` | 28 文件 / 549 用例 |
+| `0.2.2-rc.4` | `patches/archive/0.2.2-rc.4` | `port/0.2.2-rc.4` @ `cec971e708` | 28 文件 / 549 用例 |
 | `0.2.2-rc.3`（当前运行） | `patches/archive/0.2.2-rc.3` | `port/0.2.2-rc.3` @ `a40719ca1a` | 28 文件 / 549 用例 |
 | `0.2.2-rc.2` | `patches/archive/0.2.2-rc.2` | `port/0.2.2-rc.2` @ `47d77efcd5` | 28 文件 / 549 用例 |
 | `0.2.2-rc.1`（当前运行，`latest` 通道） | `patches/archive/0.2.2-rc.1` | `port/0.2.2-rc.1` @ `b50448c035` | 26 文件 / 528 用例 |
@@ -371,6 +372,7 @@ git diff <旧tag> <新tag> -- packages/bundle/web-app/package.json packages/bund
 
 | 升级 | commits / 文件 | 目标包有改动吗 | 补丁冲突 |
 |---|---|---|---|
+| `0.2.2-rc.4` → `0.2.2-rc.5` | 5 / 433 | ❌ 只改 `package.json` | 无（**三个补丁直接应用**） |
 | `0.2.2-rc.3` → `0.2.2-rc.4` | 8 / 395 | ❌ 只改 `package.json` | 无（**三个补丁直接应用**） |
 | `0.2.2-rc.2` → `0.2.2-rc.3` | 6 / 515 | ❌ 只改 `package.json` | 无（**三个补丁直接应用**） |
 | `0.2.2-rc.1` → `0.2.2-rc.2` | 1568 / 4645 | ✅ `llm-pi-ai` 18 文件 | ✅ `adapter.ts` 1 处，手工解 |
